@@ -8,7 +8,7 @@ requires 'Data::Validate::URI';
 requires 'Starman';
 requires 'Server::Starter';
 requires 'Net::Server::SS::PreFork';
-requires 'Furl';
+requires 'Redis';
 
 on test => sub {
     requires 'JSON', '2.34';

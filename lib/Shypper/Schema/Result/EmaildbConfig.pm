@@ -131,6 +131,34 @@ __PACKAGE__->has_many(
 # Created by DBIx::Class::Schema::Loader v0.07047 @ 2017-06-21 19:22:04
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:B4MAahjIS74Ri+OVWCxkiQ
 
+use Moo;
+use Shypper::TemplateResolvers::HTTP;
+
+has 'template_resolver'  => ( is => 'rw', lazy => 1, builder => '_build_template_resolver' );
+
+use JSON qw/decode_json/;
+sub _build_template_resolver {
+    my ($self) = @_;
+
+    my $r;
+
+    if ($self->html_server =~ /^http/i){
+        $r = Shypper::TemplateResolvers::HTTP->new(
+            base_url => $self->html_server,
+             %{decode_json(   $self->html_authorization || '{}' )}
+         )
+    }else{
+        die 'Cannot find a TemplateResolvers for ' . $self->html_server;
+    }
+
+    return $r;
+}
+
+sub get_template {
+    my ($self, $template_name) = @_;
+
+    return $self->template_resolver->get_template( $template_name );
+}
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

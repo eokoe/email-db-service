@@ -99,6 +99,7 @@ sub _prepare_request {
 
     $self->schema->txn_do(
         sub {
+                use DDP; p $row;
 
         }
     );
