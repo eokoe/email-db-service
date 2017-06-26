@@ -10,7 +10,8 @@ requires 'Server::Starter';
 requires 'Net::Server::SS::PreFork';
 requires 'Redis';
 requires 'Class::Load';
-
+requires 'Email::Sender';
+requires 'Text::Xslate';
 
 on test => sub {
     requires 'JSON', '2.34';
