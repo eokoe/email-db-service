@@ -5,6 +5,7 @@ use Test::Fake::HTTPD;
 
 BEGIN { use_ok 'Shypper::SchemaConnected' }
 
+my $template_a = 'This is [% abc %] template!';
 
 my $httpd = Test::Fake::HTTPD->new( timeout => 5, );
 
@@ -12,9 +13,12 @@ $httpd->run(
     sub {
         my $req = shift;
 
-        use DDP; p $req;
-
-        return [ 200, [ 'Content-Type' => 'text/plain' ], ['Hello World'] ];
+        if ( $req->uri->as_string eq '/abc' ) {
+            return [ 200, [ 'Content-Type' => 'text/plain' ], [$template_a] ];
+        }
+        else {
+            return [ 400, [ 'Content-Type' => 'text/plain' ], ['failed!'] ];
+        }
     }
 );
 
@@ -31,13 +35,15 @@ eval {
                 }
             );
 
-            use DDP; p $ec->get_template('abc');
+            my $ok = $ec->get_template('abc');
+            is( $ok, $template_a, 'template downloading works!' );
 
+            eval { $ec->get_template('xabc') };
+            like( $@, qr/template failed/, 'template not loaded' );
 
             die 'rollback';
         }
     );
 };
-die $@ if $@ =~ /^rollback/;
-
+die $@ unless $@ =~ /rollback/;
 done_testing();
