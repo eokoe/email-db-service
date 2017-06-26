@@ -1,4 +1,5 @@
 use utf8;
+
 package Shypper::Schema::Result::EmaildbConfig;
 
 # Created by DBIx::Class::Schema::Loader
@@ -48,54 +49,62 @@ __PACKAGE__->table("emaildb_config");
   is_nullable: 0
   original: {data_type => "varchar"}
 
-=head2 html_server
-
-  data_type: 'text'
-  is_nullable: 0
-  original: {data_type => "varchar"}
-
-=head2 html_authorization
-
-  data_type: 'text'
-  is_nullable: 1
-  original: {data_type => "varchar"}
-
 =head2 delete_after
 
   data_type: 'interval'
   default_value: '7 days'
   is_nullable: 0
 
+=head2 template_resolver_class
+
+  data_type: 'varchar'
+  is_nullable: 0
+  size: 60
+
+=head2 template_resolver_config
+
+  data_type: 'json'
+  default_value: '{}'
+  is_nullable: 0
+
+=head2 email_transporter_class
+
+  data_type: 'varchar'
+  is_nullable: 0
+  size: 60
+
+=head2 email_transporter_config
+
+  data_type: 'json'
+  default_value: '{}'
+  is_nullable: 0
+
 =cut
 
 __PACKAGE__->add_columns(
-  "id",
-  {
-    data_type         => "integer",
-    is_auto_increment => 1,
-    is_nullable       => 0,
-    sequence          => "emaildb_config_id_seq",
-  },
-  "from",
-  {
-    data_type   => "text",
-    is_nullable => 0,
-    original    => { data_type => "varchar" },
-  },
-  "html_server",
-  {
-    data_type   => "text",
-    is_nullable => 0,
-    original    => { data_type => "varchar" },
-  },
-  "html_authorization",
-  {
-    data_type   => "text",
-    is_nullable => 1,
-    original    => { data_type => "varchar" },
-  },
-  "delete_after",
-  { data_type => "interval", default_value => "7 days", is_nullable => 0 },
+    "id",
+    {
+        data_type         => "integer",
+        is_auto_increment => 1,
+        is_nullable       => 0,
+        sequence          => "emaildb_config_id_seq",
+    },
+    "from",
+    {
+        data_type   => "text",
+        is_nullable => 0,
+        original    => { data_type => "varchar" },
+    },
+    "delete_after",
+    { data_type => "interval", default_value => "7 days", is_nullable => 0 },
+    "template_resolver_class",
+    { data_type => "varchar", is_nullable => 0, size => 60 },
+    "template_resolver_config",
+    { data_type => "json", default_value => "{}", is_nullable => 0 },
+    "email_transporter_class",
+    { data_type => "varchar", is_nullable => 0, size => 60 },
+    "email_transporter_config",
+    { data_type => "json", default_value => "{}", is_nullable => 0 },
 );
 
 =head1 PRIMARY KEY
@@ -121,43 +130,39 @@ Related object: L<Shypper::Schema::Result::EmaildbQueue>
 =cut
 
 __PACKAGE__->has_many(
-  "emaildb_queues",
-  "Shypper::Schema::Result::EmaildbQueue",
-  { "foreign.config_id" => "self.id" },
-  { cascade_copy => 0, cascade_delete => 0 },
+    "emaildb_queues", "Shypper::Schema::Result::EmaildbQueue",
+    { "foreign.config_id" => "self.id" }, { cascade_copy => 0, cascade_delete => 0 },
 );
 
-
-# Created by DBIx::Class::Schema::Loader v0.07047 @ 2017-06-21 19:22:04
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:B4MAahjIS74Ri+OVWCxkiQ
+# Created by DBIx::Class::Schema::Loader v0.07047 @ 2017-06-26 10:37:57
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:oPP8WUtcIwdAosR7QHKZ7A
 
 use Moo;
 use Shypper::TemplateResolvers::HTTP;
 
-has 'template_resolver'  => ( is => 'rw', lazy => 1, builder => '_build_template_resolver' );
-
+use Class::Load qw/load_class/;
 use JSON qw/decode_json/;
+
+has 'template_resolver' => ( is => 'rw', lazy => 1, builder => '_build_template_resolver' );
+
 sub _build_template_resolver {
     my ($self) = @_;
 
-    my $r;
+    my $class = $self->template_resolver_class;
+    my $cnf   = decode_json( $self->template_resolver_config );
 
-    if ($self->html_server =~ /^http/i){
-        $r = Shypper::TemplateResolvers::HTTP->new(
-            base_url => $self->html_server,
-             %{decode_json(   $self->html_authorization || '{}' )}
-         )
-    }else{
-        die 'Cannot find a TemplateResolvers for ' . $self->html_server;
-    }
+    die 'template_resolver_config must be a hash ref' unless ref $cnf eq 'HASH';
 
-    return $r;
+    load_class($class);
+
+    return $class->new( %{$cnf} );
+
 }
 
 sub get_template {
-    my ($self, $template_name) = @_;
+    my ( $self, $template_name ) = @_;
 
-    return $self->template_resolver->get_template( $template_name );
+    return $self->template_resolver->get_template($template_name);
 }
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

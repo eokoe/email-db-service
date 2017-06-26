@@ -1,6 +1,7 @@
 package Shypper::TemplateResolvers::HTTP;
 use Moo;
 use utf8;
+use Shypper;
 use Shypper::Logger;
 use Furl;
 use Digest::MD5 qw/md5_hex/;
@@ -21,7 +22,7 @@ has '_furl'  => ( is => 'rw', lazy => 1, builder => '_build_furl' );
 has '_redis' => ( is => 'rw', lazy => 1, builder => '_build_redis' );
 
 sub _build_furl {
-    Furl->new( timeout => 60, agent => 'Emaildb/TemplateResolversHTTP', %{ shift->furl_opts() } );
+    Furl->new( timeout => 60, agent => 'Emaildb/TemplateResolversHTTP ' . $Shypper::VERSION, %{ shift->furl_opts() } );
 }
 
 sub _build_redis {
