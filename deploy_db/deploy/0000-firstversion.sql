@@ -47,7 +47,7 @@ ALTER FUNCTION public.email_inserted_notify()
 
 CREATE TRIGGER tgr_email_inserted
   AFTER INSERT
-  ON public.http_request
+  ON public.emaildb_queue
   FOR EACH STATEMENT
   EXECUTE PROCEDURE public.email_inserted_notify();
 
