@@ -15,6 +15,10 @@ requires 'Email::MIME::CreateHTML';
 requires 'Text::Xslate';
 requires 'Parallel::Prefork';
 
+requires 'MIME::Base64';
+requires 'Net::SMTP', '3.10';
+requires 'Authen::SASL';
+
 on test => sub {
     requires 'JSON', '2.34';
     requires 'Test::More', '0.96';
