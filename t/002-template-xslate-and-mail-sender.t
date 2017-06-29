@@ -100,6 +100,22 @@ eval {
                 is( $delivery->{successes}[0], 'another@email.com', 'field to is ok' );
             }
 
+            my $error_email = $schema->resultset('EmaildbQueue')->create(
+                {
+                    to        => '<error@email.com>',
+                    template  => 'non-existent-template',
+                    subject   => 'error@email',
+                    config_id => $ec->id,
+                    variables => encode_json(
+                        {
+                            abc => 'err'
+                        }
+                    )
+                }
+            );
+            is $daemon->run_once, -1, 'non ok is expected';
+            ok( $error_email->discard_changes->errmsg, 'errmsg is filled' );
+
             die 'rollback';
         }
     );
