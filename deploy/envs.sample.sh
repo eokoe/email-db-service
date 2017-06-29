@@ -17,9 +17,7 @@ export EMAILDB_LOG_DIR=$HOME/http-callback-logs
 # git location
 export EMAILDB_APP_DIR=$GIT_DIR
 
-# ports
-
-export EMAILDB_API_PORT=2626
+# db
 
 export EMAILDB_DB_HOST=localhost
 export EMAILDB_DB_PASS=no
@@ -27,5 +25,6 @@ export EMAILDB_DB_PORT=5432
 export EMAILDB_DB_USER=postgres
 export EMAILDB_DB_NAME=emaildb_dev
 
-export EMAILDB_API_WORKERS=2
 export EMAILDB_SQITCH_DEPLOY_NAME=local
+export EMAILDB_MAX_WORKERS=1
+export EMAILDB_FETCH_ROWS=10
