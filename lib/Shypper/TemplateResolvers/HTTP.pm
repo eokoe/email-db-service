@@ -1,6 +1,7 @@
 package Shypper::TemplateResolvers::HTTP;
 use Moo;
 use utf8;
+use strict;
 use Shypper;
 use Shypper::Logger;
 use Furl;

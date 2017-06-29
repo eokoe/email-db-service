@@ -40,3 +40,20 @@ with docker
 
     # TODO
     docker run emaildb....
+
+# caveats
+
+This module uses Parallel::Prefork when 'pulling' the database queue; It came configured with `max_workers => 1`;
+Only increase this number if you are sending more than 400 emails/second (aproximation based on speed of Text::Xslate),
+because the more workers you have, more 'skiped rows' each worker will 'not get', so it will only wast CPU time.
+
+# ENV configuration
+
+- $ENV{EMAILDB_MAX_WORKERS}=1 # max workers for Parallel::Prefork
+
+- $ENV{EMAILDB_FETCH_ROWS}=100 # number of rows each work try to lock each time it query the database
+
+    *WARNING* having `EMAILDB_FETCH_ROWS` > 1 may delivery more than one e-mail
+    in case of a failure in the middle of the batch processing (power down, kill -9, database down).
+    We could implement a Redis/Memcached of already sent ids with success in case **exactly once** delivery is wishful with minimal impact on performance.
+    But I do not think double emails is too bad for having this feature performance hit now, only no-email or receiving invalid-email is bad.

@@ -11,16 +11,17 @@ create table emaildb_config (
 
 create table emaildb_queue (
     id uuid NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
-    created_at timestamp without time zone not null default now(),
-
     config_id int not null references emaildb_config(id),
+    created_at timestamp without time zone not null default now(),
 
     "template" varchar not null,
     "to" varchar not null,
+    subject varchar not null,
     variables json not null,
 
-    sent boolean DEFAULT false,
-    sent_at timestamp without time zone
+    sent boolean,
+    visible_after timestamp without time zone,
+    errmsg varchar
 
 );
 
@@ -29,6 +30,9 @@ alter table emaildb_config add column template_resolver_config json not null def
 
 alter table emaildb_config add column email_transporter_class varchar (60) not null;
 alter table emaildb_config add column email_transporter_config json not null default '{}'::json;
+
+
+
 
 
 COMMIT;
