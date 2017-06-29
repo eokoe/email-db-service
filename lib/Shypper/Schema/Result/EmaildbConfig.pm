@@ -48,12 +48,6 @@ __PACKAGE__->table("emaildb_config");
   is_nullable: 0
   original: {data_type => "varchar"}
 
-=head2 delete_after
-
-  data_type: 'interval'
-  default_value: '7 days'
-  is_nullable: 0
-
 =head2 template_resolver_class
 
   data_type: 'varchar'
@@ -78,6 +72,12 @@ __PACKAGE__->table("emaildb_config");
   default_value: '{}'
   is_nullable: 0
 
+=head2 delete_after
+
+  data_type: 'interval'
+  default_value: '7 days'
+  is_nullable: 0
+
 =cut
 
 __PACKAGE__->add_columns(
@@ -94,8 +94,6 @@ __PACKAGE__->add_columns(
     is_nullable => 0,
     original    => { data_type => "varchar" },
   },
-  "delete_after",
-  { data_type => "interval", default_value => "7 days", is_nullable => 0 },
   "template_resolver_class",
   { data_type => "varchar", is_nullable => 0, size => 60 },
   "template_resolver_config",
@@ -104,6 +102,8 @@ __PACKAGE__->add_columns(
   { data_type => "varchar", is_nullable => 0, size => 60 },
   "email_transporter_config",
   { data_type => "json", default_value => "{}", is_nullable => 0 },
+  "delete_after",
+  { data_type => "interval", default_value => "7 days", is_nullable => 0 },
 );
 
 =head1 PRIMARY KEY
@@ -136,8 +136,8 @@ __PACKAGE__->has_many(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07047 @ 2017-06-29 14:17:53
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:juUR7prRRSpTdPhEi4IUDQ
+# Created by DBIx::Class::Schema::Loader v0.07047 @ 2017-06-29 15:57:37
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:JsbyMKflrqllTTLA8Q0RFQ
 
 use Moo;
 use Shypper::TemplateResolvers::HTTP;

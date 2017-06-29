@@ -6,6 +6,13 @@ BEGIN;
 create table emaildb_config (
     id serial not null PRIMARY key,
     "from" varchar not null,
+
+    template_resolver_class varchar (60) not null,
+    template_resolver_config json not null default '{}'::json,
+
+    email_transporter_class varchar (60) not null,
+    email_transporter_config json not null default '{}'::json,
+
     delete_after interval not null default '7 days'
 );
 
@@ -23,17 +30,6 @@ create table emaildb_queue (
     updated_at timestamp without time zone,
     visible_after timestamp without time zone,
     errmsg varchar
-
 );
-
-alter table emaildb_config add column template_resolver_class varchar (60) not null;
-alter table emaildb_config add column template_resolver_config json not null default '{}'::json;
-
-alter table emaildb_config add column email_transporter_class varchar (60) not null;
-alter table emaildb_config add column email_transporter_config json not null default '{}'::json;
-
-
-
-
 
 COMMIT;
