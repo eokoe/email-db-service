@@ -8,23 +8,6 @@ use Redis;
 BEGIN { use_ok 'Shypper::SchemaConnected' }
 BEGIN { use_ok 'Shypper::Daemon::ProcessQueue' }
 
-my $template_a = '<html><body>[% abc %]</body></html>';
-
-my $httpd = Test::Fake::HTTPD->new( timeout => 5, );
-
-$httpd->run(
-    sub {
-        my $req = shift;
-
-        if ( $req->uri->as_string eq '/txtxt' ) {
-            return [ 200, [ 'Content-Type' => 'text/plain' ], [$template_a] ];
-        }
-        else {
-            return [ 400, [ 'Content-Type' => 'text/plain' ], ['failed!'] ];
-        }
-    }
-);
-
 my $schema = GET_SCHEMA;
 my $daemon = Shypper::Daemon::ProcessQueue->new( schema => $schema );
 
