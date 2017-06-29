@@ -66,15 +66,39 @@ eval {
 
             my $conf = $daemon->config_bridge->get_config( $ec->id );
 
-            my ($delivery) = $conf->email_transporter->deliveries;
+            my ($delivery) = $conf->email_transporter->shift_deliveries;
             if ( ok( $delivery, 'defined $delivery' ) ) {
                 my $xx = qq($rand);
                 like( $delivery->{email}->as_string, qr(.+$xx.+), 'text match' );
 
-                is( $delivery->{successes}[0], 'to@email.com', 'is successes' );
+                is( $delivery->{successes}[0], 'to@email.com', 'field to is ok' );
             }
 
             is $daemon->run_once, -2, 'no item after running';
+
+            my $delayed_email = $schema->resultset('EmaildbQueue')->create(
+                {
+                    to            => '<another@email.com>',
+                    template      => 'txtxt',
+                    subject       => 'delayed',
+                    visible_after => \"clock_timestamp() + interval '0.2 seconds'",
+                    config_id     => $ec->id,
+                    variables     => encode_json(
+                        {
+                            abc => 'foobar'
+                        }
+                    )
+                }
+            );
+            is $daemon->run_once, -2, 'still no visible_after email pending';
+            select undef, undef, undef, 0.2;
+
+            is $daemon->run_once, 1, 'ok';
+
+            ($delivery) = $conf->email_transporter->shift_deliveries;
+            if ( ok( $delivery, 'defined $delivery' ) ) {
+                is( $delivery->{successes}[0], 'another@email.com', 'field to is ok' );
+            }
 
             die 'rollback';
         }

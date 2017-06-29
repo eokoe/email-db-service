@@ -62,7 +62,7 @@ sub pending_jobs {
         {
 
             'me.sent' => undef,
-            '-or'     => [ { 'me.visible_after' => undef }, { 'me.visible_after' => { '<=' => \'now()' } } ],
+            '-or'     => [ { 'me.visible_after' => undef }, { 'me.visible_after' => { '<=' => \'clock_timestamp()' } } ],
         },
         {
             rows => $opts{rows} ? $opts{rows} : $self->EMAILDB_FETCH_ROWS(),

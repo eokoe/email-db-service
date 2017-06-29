@@ -11,6 +11,8 @@ my $configs;
 sub prewarm_configs {
     my ($self) = @_;
 
+    return if $configs;
+
     $self->logger->info("Prewarming configs...");
     foreach my $cf ( $self->schema->resultset('EmaildbConfig')->all ) {
         $configs->{ $cf->id } = $cf;
