@@ -20,6 +20,7 @@ create table emaildb_queue (
     variables json not null,
 
     sent boolean,
+    updated_at timestamp without time zone,
     visible_after timestamp without time zone,
     errmsg varchar
 

@@ -83,6 +83,11 @@ __PACKAGE__->table("emaildb_queue");
   data_type: 'boolean'
   is_nullable: 1
 
+=head2 updated_at
+
+  data_type: 'timestamp'
+  is_nullable: 1
+
 =head2 visible_after
 
   data_type: 'timestamp'
@@ -135,6 +140,8 @@ __PACKAGE__->add_columns(
   { data_type => "json", is_nullable => 0 },
   "sent",
   { data_type => "boolean", is_nullable => 1 },
+  "updated_at",
+  { data_type => "timestamp", is_nullable => 1 },
   "visible_after",
   { data_type => "timestamp", is_nullable => 1 },
   "errmsg",
@@ -175,8 +182,8 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07047 @ 2017-06-29 14:17:53
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:7Ld1Am7CceoCxJblIeUs4w
+# Created by DBIx::Class::Schema::Loader v0.07047 @ 2017-06-29 15:30:45
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:j98V89xG/0eHevnDqn6TBw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

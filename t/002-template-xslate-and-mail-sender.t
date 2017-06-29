@@ -68,14 +68,13 @@ eval {
 
             my ($delivery) = $conf->email_transporter->deliveries;
             if ( ok( $delivery, 'defined $delivery' ) ) {
-
-                use DDP;
-                p $delivery;
                 my $xx = qq($rand);
                 like( $delivery->{email}->as_string, qr(.+$xx.+), 'text match' );
 
                 is( $delivery->{successes}[0], 'to@email.com', 'is successes' );
             }
+
+            is $daemon->run_once, -2, 'no item after running';
 
             die 'rollback';
         }

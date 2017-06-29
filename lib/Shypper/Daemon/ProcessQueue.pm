@@ -87,7 +87,7 @@ sub run_once {
             return -2 unless $pending;
 
             # ok
-            return 1 if $self->_send_email($pending);
+            return 1 if $self->_send_email( $pending, 1 );
 
             # nok
             return -1;
@@ -99,10 +99,9 @@ sub run_once {
 sub listen_queue {
     my ($self) = @_;
 
-    my $async      = $self->afurl;
-    my $logger     = $self->logger;
-    my $loop_times = 0;
-    my $dbh        = $self->schema->storage->dbh;
+    my $async  = $self->afurl;
+    my $logger = $self->logger;
+    my $dbh    = $self->schema->storage->dbh;
 
     $self->config_bridge->prewarm_configs();
 
@@ -122,6 +121,7 @@ sub listen_queue {
             sub {
                 $logger->info("LISTEN newemail");
                 $dbh->do("LISTEN newemail");
+                my $loop_times = 0;
                 eval {
                     while (1) {
 
@@ -135,7 +135,33 @@ sub listen_queue {
                             $self->schema->txn_do(
                                 sub {
                                     my @pendings = $self->pending_jobs();
-                                    $self->_send_email($_) for @pendings;
+                                    my @success;
+
+                                    for my $email (@pendings) {
+
+                                        eval { $self->_send_email($_) };
+                                        if ($@) {
+                                            $self->_email_queue->find( $email->{id} )->update(
+                                                {
+                                                    sent       => 0,
+                                                    updated_at => \'clock_timestamp()',
+                                                    errmsg     => "$@"
+                                                }
+                                            );
+                                        }
+                                        else {
+                                            push @success, $email->{id};
+                                        }
+
+                                    }
+
+                                    $self->_email_queue->search( { 'me.id' => { 'in' => \@success } } )->update(
+                                        {
+                                            sent       => 1,
+                                            updated_at => \'clock_timestamp()',
+                                        }
+                                    );
+
                                 }
                             );
 
@@ -162,9 +188,9 @@ sub listen_queue {
 }
 
 sub _send_email {
-    my ( $self, $row ) = @_;
+    my ( $self, $row, $update_row ) = @_;
 
-    $self->logger->debug("${\$row->{id}} preparing to send ${\$row->{to}} ${\$row->{subject}}");
+    $self->logger->debug("${\$row->{id}} preparing to send '${\$row->{to}}' '${\$row->{subject}}'");
     my $ok   = 0;
     my $step = 'prepare';
     eval {
@@ -187,9 +213,6 @@ sub _send_email {
             body => $body,
         );
 
-        use DDP;
-        p $email;
-        p $@;
         $step = 'sending message';
 
         sendmail( $email, { transport => $config->email_transporter() } );
@@ -197,8 +220,24 @@ sub _send_email {
     };
 
     if ($@) {
+        $self->_email_queue->find( $row->{id} )->update(
+            {
+                sent       => 0,
+                updated_at => \'clock_timestamp()',
+                errmsg     => "$@"
+            }
+        ) if $update_row;
+
         $self->logger->error("${\$row->{id}} Errored $step $@");
-    }else{
+        die "$@" unless $update_row;
+    }
+    else {
+        $self->_email_queue->find( $row->{id} )->update(
+            {
+                sent       => 1,
+                updated_at => \'clock_timestamp()'
+            }
+        ) if $update_row;
         $self->logger->info("${\$row->{id}} succeed to next hop");
     }
 
