@@ -10,7 +10,7 @@ use Shypper::Daemon::ProcessQueue;
 
 use Shypper::TrapSignals;
 
-my $schema = GET_SCHEMA( pg_advisory_lock => 1 );
+my $schema = GET_SCHEMA( );
 
 my $daemon = Shypper::Daemon::ProcessQueue->new( schema => $schema );
 

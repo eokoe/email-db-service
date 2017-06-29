@@ -99,9 +99,7 @@ sub run_once {
 sub listen_queue {
     my ($self) = @_;
 
-    my $async  = $self->afurl;
     my $logger = $self->logger;
-    my $dbh    = $self->schema->storage->dbh;
 
     $self->config_bridge->prewarm_configs();
 
@@ -115,21 +113,27 @@ sub listen_queue {
             }
         }
     );
+    $logger->info("master listen_queue");
 
-    while ( $pm->signal_received ne 'TERM' ) {
+    while (1) {
+        my $signal = $pm->signal_received;
+        if ( $signal eq 'TERM' ) {
+            $logger->info("master signal_received=TERM");
+            exit(0);
+        }
         $pm->start(
             sub {
-                $logger->info("LISTEN newemail");
-                $dbh->do("LISTEN newemail");
+
                 my $loop_times = 0;
+                my $dbh;
                 eval {
                     while (1) {
 
-                        while ( my $notify = $dbh->pg_notifies ) {
+                        while ( my $notify = $dbh && $dbh->pg_notifies ) {
                             $loop_times = 0;
                         }
 
-                        if ( $loop_times == 0 ) {
+                        if ( $loop_times <= 0 ) {
                             ON_TERM_WAIT;
 
                             $self->schema->txn_do(
@@ -139,7 +143,7 @@ sub listen_queue {
 
                                     for my $email (@pendings) {
 
-                                        eval { $self->_send_email($_) };
+                                        eval { $self->_send_email( $email, 0 ) };
                                         if ($@) {
                                             $self->_email_queue->find( $email->{id} )->update(
                                                 {
@@ -160,14 +164,23 @@ sub listen_queue {
                                             sent       => 1,
                                             updated_at => \'clock_timestamp()',
                                         }
-                                    );
+                                    ) if @success;
 
                                 }
                             );
 
+                            # only listen after a query, ensuring that we are connected to database
+                            if ( !$dbh ) {
+                                $dbh = $self->schema->storage->dbh;
+                                $logger->info("LISTEN newemail");
+                                $dbh->do("LISTEN newemail");
+                            }
+
                             ON_TERM_EXIT;
                             EXIT_IF_ASKED;
                         }
+
+                        $logger->error("sleep");
 
                         # sleep for 0.1 sec
                         select undef, undef, undef, 0.1;
@@ -177,12 +190,14 @@ sub listen_queue {
                     }
                 };
 
-                $logger->fatal("Fatal error: $@") if $@;
+                $logger->error("Fatal error: $@") if $@;
+                sleep 1;
             }
         );
 
-    }
+    }    # while 1
 
+    $logger->info("wait_all_children");
     $pm->wait_all_children();
 
 }

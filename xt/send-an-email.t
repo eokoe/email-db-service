@@ -11,9 +11,6 @@ BEGIN { use_ok 'Shypper::Daemon::ProcessQueue' }
 my $schema = GET_SCHEMA;
 my $daemon = Shypper::Daemon::ProcessQueue->new( schema => $schema );
 
-eval {
-    $schema->txn_do(
-        sub {
             my $cache_prefix = 'testing-myprefix' . rand . rand;
 
             my $ec = $schema->resultset('EmaildbConfig')->create(
@@ -41,7 +38,7 @@ eval {
 
             is $daemon->run_once, -2, 'no item on queue';
             my $rand      = 'this is a ' . rand . ' text!';
-            for (1..20){
+   #         for (1..20){
             my $the_email = $schema->resultset('EmaildbQueue')->create(
                 {
                     to        => $ENV{TO},
@@ -57,12 +54,8 @@ eval {
                 }
             );
 
-            is $daemon->run_once, 1, 'ok';
+  #          is $daemon->run_once, 1, 'ok';
         }
 
-            die 'rollback';
-        }
-    );
-};
-die $@ unless $@ =~ /rollback/;
-done_testing();
+
+ done_testing();

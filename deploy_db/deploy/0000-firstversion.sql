@@ -32,4 +32,24 @@ create table emaildb_queue (
     errmsg varchar
 );
 
+CREATE OR REPLACE FUNCTION public.email_inserted_notify()
+  RETURNS trigger AS
+$BODY$
+    BEGIN
+        NOTIFY newemail;
+        RETURN NULL;
+    END;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+ALTER FUNCTION public.email_inserted_notify()
+  OWNER TO postgres;
+
+CREATE TRIGGER tgr_email_inserted
+  AFTER INSERT
+  ON public.http_request
+  FOR EACH STATEMENT
+  EXECUTE PROCEDURE public.email_inserted_notify();
+
+
 COMMIT;

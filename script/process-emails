@@ -8,7 +8,7 @@ use lib "$Bin/../lib";
 
 use Daemon::Control;
 
-my $name = 'process-requests';
+my $name = 'process-emails';
 
 my $logdir = $ENV{EMAILDB_LOG_DIR} || '/tmp';
 
