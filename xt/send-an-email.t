@@ -32,14 +32,16 @@ eval {
                             port          => '587',
                             sasl_username => $ENV{SENDGRID_USER},
                             sasl_password => $ENV{SENDGRID_PASS},
+                            debug => 1
                         }
                     ),
-                    email_transporter_class => 'Email::Sender::Transport::SMTP'
+                    email_transporter_class => 'Email::Sender::Transport::SMTP::Persistent'
                 }
             );
 
             is $daemon->run_once, -2, 'no item on queue';
             my $rand      = 'this is a ' . rand . ' text!';
+            for (1..20){
             my $the_email = $schema->resultset('EmaildbQueue')->create(
                 {
                     to        => $ENV{TO},
@@ -56,6 +58,7 @@ eval {
             );
 
             is $daemon->run_once, 1, 'ok';
+        }
 
             die 'rollback';
         }

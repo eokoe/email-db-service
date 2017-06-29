@@ -62,7 +62,7 @@ sub pending_jobs {
         {
 
             'me.sent' => undef,
-            '-or'     => [ { 'me.visible_after' => undef }, { 'me.visible_after' => { '<=' => \'clock_timestamp()' } } ],
+            '-or' => [ { 'me.visible_after' => undef }, { 'me.visible_after' => { '<=' => \'clock_timestamp()' } } ],
         },
         {
             rows => $opts{rows} ? $opts{rows} : $self->EMAILDB_FETCH_ROWS(),
@@ -205,6 +205,9 @@ sub _send_email {
 
         $step = 'Email::MIME';
         my $email = Email::MIME->create_html(
+            embed      => 0,
+            inline_css => 0,
+
             header => [
                 To      => $row->{to},
                 From    => $config->from(),
