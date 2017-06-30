@@ -180,8 +180,6 @@ sub listen_queue {
                             EXIT_IF_ASKED;
                         }
 
-                        $logger->error("sleep");
-
                         # sleep for 0.1 sec
                         select undef, undef, undef, 0.1;
 
