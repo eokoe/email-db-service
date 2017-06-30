@@ -8,6 +8,7 @@ use Furl;
 use Digest::MD5 qw/md5_hex/;
 use Redis;
 use JSON;
+use Encode;
 
 has 'logger' => ( is => 'rw', lazy => 1, builder => \&get_logger );
 
@@ -40,7 +41,10 @@ sub get_template {
     my $cachekey = $self->cache_prefix . md5_hex($url);
     my $cached   = $self->_redis->get($cachekey);
 
-    unless ($cached) {
+    if ($cached) {
+        $cached = decode( 'UTF-8', $cached );
+    }
+    else {
         my $headers = $self->headers || [];
         $self->logger->debug("Downloading '$url'");
         my $res = $self->_furl->get( $url, $headers );
@@ -50,7 +54,7 @@ sub get_template {
           unless $res->is_success;
 
         $cached = $res->decoded_content;
-        $self->_redis->setex( $cachekey, $self->cache_timeout, $res->decoded_content );
+        $self->_redis->setex( $cachekey, $self->cache_timeout, encode( 'UTF-8', $res->decoded_content ) );
     }
 
     return $cached;
