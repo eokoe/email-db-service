@@ -12,6 +12,7 @@ use Parallel::Prefork;
 use Text::Xslate;
 use Email::MIME::CreateHTML;
 use Email::Sender::Simple qw(sendmail);
+use Encode;
 
 my $xslate = Text::Xslate->new(
     syntax => 'TTerse',
@@ -222,9 +223,9 @@ sub _send_email {
             inline_css => 0,
 
             header => [
-                To      => $row->{to},
-                From    => $config->from(),
-                Subject => $row->{subject},
+                To      => encode( 'UTF-8', $row->{to} ),
+                From    => encode( 'UTF-8', $config->from() ),
+                Subject => encode( 'UTF-8', $row->{subject} ),
             ],
             body => $body,
         );
