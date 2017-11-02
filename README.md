@@ -22,9 +22,19 @@ Shypper::TemplateResolvers::HTTP needs Redis for caching
 
 # TODO
 
-- Remove Redis as a dep (add CHI instead?!)
 - Optional Mojo::Template instead of Text::Xslate ?
-- Configure docker
+- Daemon to remove sent emails from database
+
+# Configuring
+
+You need to setup those env vars:
+
+    EMAILDB_DB_HOST
+    EMAILDB_DB_PASS
+    EMAILDB_DB_PORT
+    EMAILDB_DB_USER
+    EMAILDB_DB_NAME
+
 
 # Starting this service
 
@@ -38,13 +48,18 @@ as a daemon
 
 with docker
 
-    # TODO
-    docker run emaildb....
+    ./build_container.sh
+
+    After this, you may edit and then run
+
+    ./sample--run_container.sh
+
+If you are using `EMAILDB_DB_HOST=172.17.0.1` you may have to configure your firewall to allow connections from containers to your database.
 
 # caveats
 
-This module uses Parallel::Prefork when 'pulling' the database queue; It came configured with `max_workers => 1`;
-Only increase this number if you are sending more than 400 emails/second (aproximation based on speed of Text::Xslate),
+This module uses Parallel::Prefork when 'pulling' the database queue; It is configured with `max_workers => 1`;
+Only increase this number if you are sending more than 400 emails/second (approximation based on speed of Text::Xslate),
 because the more workers you have, more 'skiped rows' each worker will 'not get', so it will only wast CPU time.
 
 # ENV configuration
@@ -53,7 +68,10 @@ because the more workers you have, more 'skiped rows' each worker will 'not get'
 
 - $ENV{EMAILDB_FETCH_ROWS}=100 # number of rows each work try to lock each time it query the database
 
-    *WARNING* having `EMAILDB_FETCH_ROWS` > 1 may delivery more than one e-mail
+    * **WARNING** *
+
+    Having `EMAILDB_FETCH_ROWS` > 1 may delivery more than one e-mail
     in case of a failure in the middle of the batch processing (power down, kill -9, database down).
-    We could implement a Redis/Memcached of already sent ids with success in case **exactly once** delivery is wishful with minimal impact on performance.
-    But I do not think double emails is too bad for having this feature performance hit now, only no-email or receiving invalid-email is bad.
+
+    We could use Redis to keep a list of sent ids, pull requests are wellcome, just remember that we would need to clear this list sometime.
+    Nevertheless, I do not think receiving an email twice is too bad. so I'm leaving this feature by now.
