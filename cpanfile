@@ -18,6 +18,7 @@ requires 'Parallel::Prefork';
 requires 'MIME::Base64';
 requires 'Net::SMTP', '3.10';
 requires 'Authen::SASL';
+requires 'Email::Sender::Transport::SMTP::TLS';
 
 on test => sub {
     requires 'JSON', '2.34';
