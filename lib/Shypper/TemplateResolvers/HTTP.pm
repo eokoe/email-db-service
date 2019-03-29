@@ -17,7 +17,7 @@ has 'headers'       => ( is => 'rw' );
 has 'cache_prefix'  => ( is => 'rw', default => 'shypper-template-' );
 has 'cache_timeout' => ( is => 'rw', default => '60' );
 
-has 'redis_opts' => ( is => 'rw', default => sub { +{} } );
+has 'redis_opts' => ( is => 'rw', default => sub { +{reconnect => 60, every => 1_000_000} } );
 has 'furl_opts'  => ( is => 'rw', default => sub { +{} } );
 
 has '_furl'  => ( is => 'rw', lazy => 1, builder => '_build_furl' );
