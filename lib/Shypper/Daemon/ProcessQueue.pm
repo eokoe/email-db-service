@@ -210,7 +210,7 @@ sub _send_email {
     eval {
         my $config = $self->config_bridge->get_config( $row->{config_id} );
         my $vars = $row->{variables} ? decode_json( $row->{variables} ) : {};
-
+        my $reply = delete $vars->{'reply-to'};
         my $base_template = $config->get_template( $row->{template} )
           || $self->logger->logcroak("Template ${\$row->{template}} not found!");
 
@@ -226,6 +226,7 @@ sub _send_email {
                 To      => encode( 'UTF-8', $row->{to} ),
                 From    => encode( 'UTF-8', $config->from() ),
                 Subject => encode( 'UTF-8', $row->{subject} ),
+                $reply ? ('Reply-To' => encode( 'UTF-8', $reply )) : (),
             ],
             body => $body,
         );
