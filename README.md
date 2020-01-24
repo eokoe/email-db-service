@@ -82,6 +82,14 @@ because the more workers you have, more 'skiped rows' each worker will 'not get'
 
     Included after option have text email generated from html, as a potentially memory-leak module was added to make this conversion (HTML::FormatText::WithLinks / HTML::TreeBuilder)
 
+- $ENV{USE_MIME_Q_DEFAULT}=''
+
+    Set to 1 to enable mimi-q on subject by default
+
+- $ENV{USE_TXT_DEFAULT}=''
+
+    Set to 1 to generate text from text by default
+
 
 # Reserved Variables
 

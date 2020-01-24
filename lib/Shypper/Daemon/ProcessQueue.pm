@@ -223,8 +223,8 @@ sub _send_email {
         my $config    = $self->config_bridge->get_config($row->{config_id});
         my $vars      = $row->{variables} ? decode_json($row->{variables}) : {};
         my $reply     = delete $vars->{'reply-to'};
-        my $use_mimeq = delete $vars->{':qmq'};
-        my $gen_text  = delete $vars->{':txt'};
+        my $use_mimeq = delete $vars->{':qmq'} || $ENV{USE_MIME_Q_DEFAULT};
+        my $gen_text  = delete $vars->{':txt'} || $ENV{USE_TXT_DEFAULT};
 
         my $base_template = $config->get_template($row->{template})
           || $self->logger->logcroak("Template ${\$row->{template}} not found!");
