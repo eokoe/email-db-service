@@ -236,6 +236,7 @@ sub _send_email {
             $step = 'text_from_html';
 
             $extra{text_body} = &_text_from_html($body);
+            $extra{text_body_attributes} = {'content_type' => 'text/plain; charset="UTF-8"'};
         }
 
         $step = 'Email::MIME create_html';
