@@ -75,3 +75,17 @@ because the more workers you have, more 'skiped rows' each worker will 'not get'
 
     We could use Redis to keep a list of sent ids, pull requests are wellcome, just remember that we would need to clear this list sometime.
     Nevertheless, I do not think receiving an email twice is too bad. so I'm leaving this feature by now.
+
+- $ENV{EXIT_WORKER_AFTER}=''
+
+    Set this if you want to recycle workers after that many emails have been processed.
+
+    Included after option have text email generated from html, as a potentially memory-leak module was added to make this conversion (HTML::FormatText::WithLinks / HTML::TreeBuilder)
+
+
+# Reserved Variables
+
+    reply-to - set reply-to header
+    :txt - generate text version from HTML using HTML::FormatText::WithLinks, [may reduce spamassassin score ~ 1 point]
+    :qmq - encode subject with MIMI-Q instead of UTF8 [may reduce spamassassin score ~ 0.1 point]
+
