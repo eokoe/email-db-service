@@ -211,11 +211,15 @@ sub _send_email {
         my $config = $self->config_bridge->get_config( $row->{config_id} );
         my $vars = $row->{variables} ? decode_json( $row->{variables} ) : {};
         my $reply = delete $vars->{'reply-to'};
+
+        my $use_mimeq = delete $vars->{'qmq'};
+
         my $base_template = $config->get_template( $row->{template} )
           || $self->logger->logcroak("Template ${\$row->{template}} not found!");
 
         $step = 'rendering';
         my $body = $xslate->render_string( $base_template, $vars, );
+
 
         $step = 'Email::MIME';
         my $email = Email::MIME->create_html(
@@ -225,7 +229,7 @@ sub _send_email {
             header => [
                 To      => encode( 'UTF-8', $row->{to} ),
                 From    => encode( 'UTF-8', $config->from() ),
-                Subject => encode( 'UTF-8', $row->{subject} ),
+                Subject => encode( $use_mimeq ? 'MIME-Q' : 'UTF-8', $row->{subject} ),
                 $reply ? ('Reply-To' => encode( 'UTF-8', $reply )) : (),
             ],
             body => $body,
