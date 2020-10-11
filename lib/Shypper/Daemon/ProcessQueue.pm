@@ -223,6 +223,8 @@ sub _send_email {
         my $config    = $self->config_bridge->get_config($row->{config_id});
         my $vars      = $row->{variables} ? decode_json($row->{variables}) : {};
         my $reply     = delete $vars->{'reply-to'};
+        my $cc        = delete $vars->{':cc'};
+        my $bcc       = delete $vars->{':bcc'};
         my $use_mimeq = delete $vars->{':qmq'} || $ENV{USE_MIME_Q_DEFAULT};
         my $gen_text  = delete $vars->{':txt'} || $ENV{USE_TXT_DEFAULT};
 
@@ -235,7 +237,7 @@ sub _send_email {
         if ($gen_text) {
             $step = 'text_from_html';
 
-            $extra{text_body} = &_text_from_html($body);
+            $extra{text_body}            = &_text_from_html($body);
             $extra{text_body_attributes} = {'content_type' => 'text/plain; charset="UTF-8"'};
         }
 
@@ -249,6 +251,8 @@ sub _send_email {
                 From    => encode('UTF-8',                         $config->from()),
                 Subject => encode($use_mimeq ? 'MIME-Q' : 'UTF-8', $row->{subject}),
                 $reply ? ('Reply-To' => encode('UTF-8', $reply)) : (),
+                $cc    ? ('Cc'       => encode('UTF-8', $cc))    : (),
+                $bcc   ? ('Bcc'      => encode('UTF-8', $bcc))   : (),
             ],
             body => $body,
             %extra,
