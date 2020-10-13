@@ -241,6 +241,10 @@ sub _send_email {
             $extra{text_body_attributes} = {'content_type' => 'text/plain; charset="UTF-8"'};
         }
 
+        $self->logger->debug("Bcc $bcc")        if $bcc;
+        $self->logger->debug("Cc $cc")          if $cc;
+        $self->logger->debug("reply-to $reply") if $reply;
+
         $step = 'Email::MIME create_html';
         my $email = Email::MIME->create_html(
             embed      => 0,
