@@ -241,9 +241,9 @@ sub _send_email {
             $extra{text_body_attributes} = {'content_type' => 'text/plain; charset="UTF-8"'};
         }
 
-        $self->logger->debug("Bcc $bcc")        if $bcc;
         $self->logger->debug("Cc $cc")          if $cc;
         $self->logger->debug("reply-to $reply") if $reply;
+        $self->logger->debug("Bcc $bcc")        if $bcc;
 
         $step = 'Email::MIME create_html';
         my $email = Email::MIME->create_html(
@@ -256,7 +256,6 @@ sub _send_email {
                 Subject => encode($use_mimeq ? 'MIME-Q' : 'UTF-8', $row->{subject}),
                 $reply ? ('Reply-To' => encode('UTF-8', $reply)) : (),
                 $cc    ? ('Cc'       => encode('UTF-8', $cc))    : (),
-                $bcc   ? ('Bcc'      => encode('UTF-8', $bcc))   : (),
             ],
             body => $body,
             %extra,
@@ -266,6 +265,33 @@ sub _send_email {
 
         sendmail($email, {transport => $config->email_transporter()});
         $ok = 1;
+
+        if ($bcc) {
+            $step = 'Email::MIME create_html BCC';
+            my $email = Email::MIME->create_html(
+                embed      => 0,
+                inline_css => 0,
+
+                header => [
+                    To      => encode('UTF-8', $bcc),
+                    From    => encode('UTF-8', $config->from()),
+                    Subject => encode(
+                        $use_mimeq ? 'MIME-Q' : 'UTF-8',
+                        'BCC: ' . $row->{subject} . ': To ' . $row->{to} . ($cc ? ' Copy ' . $cc : '')
+                    ),
+                    $reply ? ('Reply-To' => encode('UTF-8', $reply)) : (),
+                ],
+                body => $body,
+                %extra,
+            );
+
+            $step = 'send message bcc';
+
+            eval { sendmail($email, {transport => $config->email_transporter()}) };
+            if ($@) {
+                $self->logger->error("BCC ${\$row->{id}} Errored at $step with msg $@");
+            }
+        }
     };
 
     if ($@) {
