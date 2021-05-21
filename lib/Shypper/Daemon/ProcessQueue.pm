@@ -10,7 +10,8 @@ use Shypper::TrapSignals;
 use Shypper::ConfigBridge;
 use Parallel::Prefork;
 use Text::Xslate;
-use Email::MIME::CreateHTML;
+use MIME::Base64;
+use Email::MIME;
 use Email::Sender::Simple qw(sendmail);
 use Encode;
 
@@ -219,14 +220,17 @@ sub _send_email {
     my $ok   = 0;
     my $step = 'prepare';
     eval {
-        my %extra;
-        my $config    = $self->config_bridge->get_config($row->{config_id});
-        my $vars      = $row->{variables} ? decode_json($row->{variables}) : {};
-        my $reply     = delete $vars->{'reply-to'};
-        my $cc        = delete $vars->{':cc'};
-        my $bcc       = delete $vars->{':bcc'};
-        my $use_mimeq = delete $vars->{':qmq'} || $ENV{USE_MIME_Q_DEFAULT};
-        my $gen_text  = delete $vars->{':txt'} || $ENV{USE_TXT_DEFAULT};
+
+        my $config = $self->config_bridge->get_config($row->{config_id});
+        my $vars
+          = $row->{variables}
+          ? ($ENV{VARIABLES_JSON_IS_UTF8} ? from_json($row->{variables}) : decode_json($row->{variables}))
+          : {};
+        my $reply              = delete $vars->{'reply-to'};
+        my $cc                 = delete $vars->{':cc'};
+        my $bcc                = delete $vars->{':bcc'};
+        my $gen_text           = delete $vars->{':txt'} || $ENV{USE_TXT_DEFAULT};
+        my $attachments_config = delete $vars->{'attachments_config'};
 
         my $base_template = $config->get_template($row->{template})
           || $self->logger->logcroak("Template ${\$row->{template}} not found!");
@@ -237,61 +241,99 @@ sub _send_email {
         if ($gen_text) {
             $step = 'text_from_html';
 
-            $extra{text_body}            = &_text_from_html($body);
-            $extra{text_body_attributes} = {'content_type' => 'text/plain; charset="UTF-8"'};
+            $gen_text = &_text_from_html($body);
         }
 
         $self->logger->debug("Cc $cc")          if $cc;
         $self->logger->debug("reply-to $reply") if $reply;
         $self->logger->debug("Bcc $bcc")        if $bcc;
 
-        $step = 'Email::MIME create_html';
-        my $email = Email::MIME->create_html(
-            embed      => 0,
-            inline_css => 0,
+        my @parts;
 
-            header => [
-                To      => encode('UTF-8',                         $row->{to}),
-                From    => encode('UTF-8',                         $config->from()),
-                Subject => encode($use_mimeq ? 'MIME-Q' : 'UTF-8', $row->{subject}),
-                $reply ? ('Reply-To' => encode('UTF-8', $reply)) : (),
-                $cc    ? ('Cc'       => encode('UTF-8', $cc))    : (),
-            ],
-            body => $body,
-            %extra,
+        push @parts, Email::MIME->create(
+            attributes => {
+                content_type => "text/plain",
+                charset      => "UTF-8",
+                encoding     => 'quoted-printable',
+            },
+            body_str => $gen_text,
+        ) if $gen_text;
+
+        push @parts, Email::MIME->create(
+            attributes => {
+                content_type => "text/html",
+                charset      => "UTF-8",
+                encoding     => 'quoted-printable',
+            },
+            body_str => $body,
         );
+
+        if ($attachments_config) {
+            my $conf = $attachments_config;
+
+            foreach my $attachment (@{$conf->{files}}) {
+                my $binary = decode_base64($attachment->{content});
+
+                push @parts, Email::MIME->create(
+                    attributes => {
+                        filename     => $attachment->{name}         || 'attachment',
+                        content_type => $attachment->{content_type} || 'application/octet-stream',
+                        encoding     => "base64",
+                        name         => $attachment->{name} || 'attachment',
+                    },
+                    body => $binary,
+                );
+            }
+
+
+        }
+
+        $step = 'Email::MIME create';
+        my $email = Email::MIME->create(
+            header_str => [
+                From    => $config->from(),
+                To      => $row->{to},
+                Subject => $row->{subject},
+                $reply ? ('Reply-To' => $reply) : (),
+                $cc    ? ('Cc'       => $cc)    : (),
+            ],
+            parts => [@parts],
+        );
+        if ($gen_text) {
+            $email->content_type_set('multipart/alternative');
+        }
+
+        use DDP;
+        p $email;
 
         $step = 'send message';
 
-        sendmail($email, {transport => $config->email_transporter()});
+        sendmail($email->as_string, {transport => $config->email_transporter()});
         $ok = 1;
 
         if ($bcc) {
-            $step = 'Email::MIME create_html BCC';
-            my $email = Email::MIME->create_html(
-                embed      => 0,
-                inline_css => 0,
-
-                header => [
-                    To      => encode('UTF-8', $bcc),
-                    From    => encode('UTF-8', $config->from()),
-                    Subject => encode(
-                        $use_mimeq ? 'MIME-Q' : 'UTF-8',
-                        'BCC: ' . $row->{subject} . ': To ' . $row->{to} . ($cc ? ' Copy ' . $cc : '')
-                    ),
-                    $reply ? ('Reply-To' => encode('UTF-8', $reply)) : (),
+            my $email = Email::MIME->create(
+                header_str => [
+                    From    => $config->from(),
+                    To      => $bcc,
+                    Subject => 'BCC: ' . $row->{subject} . ': To ' . $row->{to} . ($cc ? ' Copy ' . $cc : ''),
+                    $reply ? ('Reply-To' => $reply) : (),
                 ],
-                body => $body,
-                %extra,
+                parts => [@parts],
             );
-
+            if ($gen_text) {
+                $email->content_type_set('multipart/alternative');
+            }
             $step = 'send message bcc';
 
             eval { sendmail($email, {transport => $config->email_transporter()}) };
             if ($@) {
                 $self->logger->error("BCC ${\$row->{id}} Errored at $step with msg $@");
             }
+
         }
+
+
     };
 
     if ($@) {
@@ -330,7 +372,10 @@ sub _text_from_html {
         footnote    => ''
     );
 
-    return $f->parse($html);
+    my $text = $f->parse($html);
+
+    #$text = encode('utf8', $text);
+    return $text;
 }
 
 1;

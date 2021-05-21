@@ -90,6 +90,10 @@ because the more workers you have, more 'skiped rows' each worker will 'not get'
 
     Set to 1 to generate text from text by default
 
+- $ENV{VARIABLES_JSON_IS_UTF8}=''
+
+    Set to 1 to if you are saving variables fields with correct UTF8 encoding
+
 
 # Reserved Variables
 
@@ -97,5 +101,5 @@ because the more workers you have, more 'skiped rows' each worker will 'not get'
     :cc - set Cc header
     :bcc - set Bcc header
     :txt - generate text version from HTML using HTML::FormatText::WithLinks, [may reduce spamassassin score ~ 1 point]
-    :qmq - encode subject with MIMI-Q instead of UTF8 [may reduce spamassassin score ~ 0.1 point]
+
 

@@ -11,7 +11,7 @@ requires 'Net::Server::SS::PreFork';
 requires 'Redis';
 requires 'Class::Load';
 requires 'Email::Sender';
-requires 'Email::MIME::CreateHTML';
+requires 'Email::MIME';
 requires 'Text::Xslate';
 requires 'Parallel::Prefork';
 
