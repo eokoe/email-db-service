@@ -250,23 +250,47 @@ sub _send_email {
 
         my @parts;
 
-        push @parts, Email::MIME->create(
-            attributes => {
-                content_type => "text/plain",
-                charset      => "UTF-8",
-                encoding     => 'quoted-printable',
-            },
-            body_str => $gen_text,
-        ) if $gen_text;
+        if ($gen_text) {
+            my $text_email = Email::MIME->create(
+                attributes => {
+                    content_type => "text/plain",
+                    charset      => "UTF-8",
+                    encoding     => 'quoted-printable',
+                },
+                body_str => $gen_text,
+            );
 
-        push @parts, Email::MIME->create(
-            attributes => {
-                content_type => "text/html",
-                charset      => "UTF-8",
-                encoding     => 'quoted-printable',
-            },
-            body_str => $body,
-        );
+            my $html_email = Email::MIME->create(
+                attributes => {
+                    content_type => "text/html",
+                    charset      => "UTF-8",
+                    encoding     => 'quoted-printable',
+                },
+                body_str => $body,
+            );
+
+
+            $text_email->parts_set(
+                [
+                    $text_email->parts,
+                    $html_email,
+                ],
+            );
+
+            $text_email->content_type_set('multipart/alternative');
+            push @parts, $text_email;
+        }
+        else {
+
+            push @parts, Email::MIME->create(
+                attributes => {
+                    content_type => "text/html",
+                    charset      => "UTF-8",
+                    encoding     => 'quoted-printable',
+                },
+                body_str => $body,
+            );
+        }
 
         if ($attachments_config) {
             my $conf = $attachments_config;
@@ -299,12 +323,6 @@ sub _send_email {
             ],
             parts => [@parts],
         );
-        if ($gen_text) {
-            $email->content_type_set('multipart/alternative');
-        }
-
-        use DDP;
-        p $email;
 
         $step = 'send message';
 
