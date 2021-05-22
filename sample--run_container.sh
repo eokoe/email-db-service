@@ -15,5 +15,6 @@ docker run --name NOME_SEU_CONTAINER \
 	-v $SOURCE_DIR:/src -v $DATA_DIR:/data \
     -e "EMAILDB_DB_HOST=172.17.0.1" \
     -e "EMAILDB_DB_NAME=your_database" \
+    -e "VARIABLES_JSON_IS_UTF8=1" \
 	--cpu-shares=512 \
 	--memory 500m -d --restart unless-stopped eokoe/emaildb
