@@ -37,6 +37,8 @@ USER app
 RUN /tmp/install-cpan-extra-modules.sh
 USER root
 
+ENV VARIABLES_JSON_IS_UTF8=1
+
 RUN mkdir /etc/service/redis
 COPY redis.sh /etc/service/redis/run
 

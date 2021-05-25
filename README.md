@@ -60,7 +60,7 @@ If you are using `EMAILDB_DB_HOST=172.17.0.1` you may have to configure your fir
 
 This module uses Parallel::Prefork when 'pulling' the database queue; It is configured with `max_workers => 1`;
 Only increase this number if you are sending more than 400 emails/second (approximation based on speed of Text::Xslate),
-because the more workers you have, more 'skiped rows' each worker will 'not get', so it will only wast CPU time.
+because the more workers you have, the more 'skiped rows' each worker will have, so it will only waste CPU.
 
 # ENV configuration
 
