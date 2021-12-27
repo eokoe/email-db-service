@@ -1,4 +1,4 @@
-FROM phusion/baseimage:0.9.22
+FROM phusion/baseimage:focal-1.1.0
 
 # Use baseimage-docker's init system.
 CMD ["/sbin/my_init"]
