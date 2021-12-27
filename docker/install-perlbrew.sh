@@ -8,6 +8,6 @@ echo 'source /home/app/perl5/perlbrew/etc/bashrc' >> /home/app/.bashrc;
 
 source /home/app/perl5/perlbrew/etc/bashrc
 
-perlbrew install -n -j 8 perl-5.26.1
+perlbrew install -n -j 8 perl-5.32.1
 perlbrew install-cpanm
 perlbrew switch perl-5.26.1
