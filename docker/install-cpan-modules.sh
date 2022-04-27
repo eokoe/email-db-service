@@ -10,12 +10,8 @@ cd /tmp/
 cpanm -n Furl \
 Moo \
 Log::Log4perl \
-DBIx::Class::Schema::Loader \
 DBIx::Class::InflateColumn::DateTime \
 Data::Validate::URI \
-Starman \
-Server::Starter \
-Net::Server::SS::PreFork \
 Class::Load \
 Email::Sender \
 Email::MIME::CreateHTML \

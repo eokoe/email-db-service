@@ -5,11 +5,7 @@ CMD ["/sbin/my_init"]
 
 RUN apt-get update && apt-get install -y \
     build-essential \
-    curl \
-    libcurl4-openssl-dev libxml2 libxml2-dev libexpat1-dev zlib1g-dev libssl-dev \
-    libjpeg-dev libpng-dev libgif-dev \
-    git \
-    ffmpeg \
+    libssl-dev \
  && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 RUN useradd -ms /bin/bash app;

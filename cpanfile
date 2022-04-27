@@ -1,13 +1,9 @@
 requires 'Furl';
 requires 'Moo';
 requires 'Log::Log4perl';
-requires 'DBIx::Class::Schema::Loader';
 requires 'DBD::Pg';
 requires 'DBIx::Class::InflateColumn::DateTime';
 requires 'Data::Validate::URI';
-requires 'Starman';
-requires 'Server::Starter';
-requires 'Net::Server::SS::PreFork';
 requires 'Class::Load';
 requires 'Email::Sender';
 requires 'Email::MIME';
@@ -24,6 +20,7 @@ on test => sub {
     requires 'JSON', '2.34';
     requires 'Test::More', '0.96';
 
+    requires 'DBIx::Class::Schema::Loader';
     requires 'HTTP::Response';
     requires 'Test::Fake::HTTPD';
     requires 'LWP::UserAgent';

@@ -3,85 +3,50 @@
 Emaildb uses a postgres database as a queue for (~~probably~~ *in theory* transactional 😉) emails,
 so, if you rollback a transaction, you don't send any e-mail!
 
-Use `$ sqitch deploy` to deploy the necessary tables on your database.
+It also decouples email templates from your backend, you can host your templates anywhere with HTTP/HTTPS.
 
-Insert on `public.emaildb_config` to your needs.
+# Remote deps
 
-When an insert occurs on `emaildb_queue` this service will send it.
+- PostgreSQL >= 9.5 - used as queue (requires SKIP LOCKED feature)
 
-# backend
+Other than that, you need an an SMTP server
 
-- PostgreSQL 9.5+ for queue
+> Redis dep was removed on 2022-04-27 - file cache is used instead
+
+# Backend overview
+
+- written in perl, uses cpanfile to control perl deps
 - Text::Xslate for parsing / templating
 - Email::Sender::Transport:** for *sending* e-mails
 - Shypper::TemplateResolvers::* for getting texts to pass to Text::Xslate
 
-# deps (REMOVED Redis at 2022-04-27 - file cache is used instead)
+## Shypper::TemplateResolvers
 
-# tables
+Classes on this namespace downloads and render the templates for the Email::Sender::Transport class
 
-#### emaildb_config
+### Shypper::TemplateResolvers::HTTP
 
-    -- id for the config - changes on this table needs to restart the container
-    id                       | 1
-    from                     | "FooBar" <user@example.com>
-    -- Shypper::TemplateResolvers::HTTP only supported on the docker image
-    template_resolver_class  | Shypper::TemplateResolvers::HTTP
-    -- where to download the templates from
-    template_resolver_config | {"base_url":"https://example.com/static/template-emails/" }
-    -- Email::Sender::Transport::SMTP is also installed on docker
-    email_transporter_class  | Email::Sender::Transport::SMTP::Persistent
-    -- args to email_transporter_class
-    email_transporter_config | {"sasl_password":"...","sasl_username":"apikey","port":"587","host":"smtp.sendgrid.net"}
-    -- not implemented, emails are kept forever on docker version
-    delete_after             | 180 days
+The bellow configs are available:
 
-#### emaildb_queue
+    base_url - required
+    cache_path - default '/tmp/'
+    cache_prefix - default 'shypper-template-' - prefix for file name
+    cache_timeout - default '60', files older or equal to this setting will be discarted and fetched again from source
+    headers - no default, set as array, eg: ["authorization", "Basic 123"]
 
-    -- random uuid is fine
-    id            | uuid
-    -- FK to emaildb_config
-    config_id     | integer
-    -- when email was first created
-    created_at    | timestamp without time zone
-    -- template to be passed to template_resolver_class
-    template      | character varying
-    -- mailto
-    to            | character varying
-    -- subject (auto encoded to utf8)
-    subject       | character varying
-    -- variables for interpolation on the template
-        if using double-encoded utf8, set VARIABLES_JSON_IS_UTF8=0
-    variables     | json
-    -- is message sent?
-        NULL = not tried yet
-        true - sent
-        false - failed
-    sent          | boolean
-    -- last changed at
-    updated_at    | timestamp without time zone
-    -- wait until this timestmap before seding
-    visible_after | timestamp without time zone
-    -- if failed, whats the error message
-    errmsg        | character varying
-
-To retry or resend, set both `errmsg` and `sent` to NULL, then trigger `NOTIFY newemail` or wait the next minute
-
-# TODO
-
-- Optional Mojo::Template instead of Text::Xslate ?
-- Daemon to remove sent emails from database
+> obs: it supports HTTPS
 
 # Configuring
 
-You need to setup those env vars (check file .env if using docker-compose):
+All ops setting are set via env variables ([check file](.env)) for more info or keep reading.
 
-    EMAILDB_DB_HOST
-    EMAILDB_DB_PASS
-    EMAILDB_DB_PORT
-    EMAILDB_DB_USER
-    EMAILDB_DB_NAME
+Dynamic configs are set via tables, see bellow:
 
+Use `$ sqitch deploy` to deploy the necessary tables on your database. Or copy/paste from [email-db-service/deploy_db/deploy/0000-firstversion.sql](email-db-service/deploy_db/deploy/0000-firstversion.sql) and run on your postgres.
+
+Insert on `public.emaildb_config` to your needs.
+
+When an insert occurs on `emaildb_queue` this service will send it.
 
 # Starting this service
 
@@ -118,11 +83,42 @@ with docker
 If you are using `EMAILDB_DB_HOST=172.17.0.1` you may have to configure your firewall to allow connections from containers to your database.
 Starting the database before `dockerd` is enssenstial for this to work reliably, prefer to use dedicated host or move db to a docker container.
 
-# caveats
+# Tables detail
 
-This module uses Parallel::Prefork when 'pulling' the database queue; It is configured with `max_workers => 1`;
-Only increase this number if you are sending more than 400 emails/second (approximation based on speed of Text::Xslate),
-because the more workers you have, the more 'skiped rows' each worker will have, so it will only waste CPU.
+#### emaildb_config
+
+| column | eg | comment |
+| ----- |----|-------|
+| id                       | 1 | id for the config - changes on this table needs to restart the container |
+| from                     | "FooBar" <user@example.com> | Set FROM name and email |
+| template_resolver_class  | Shypper::TemplateResolvers::HTTP | Shypper::TemplateResolvers::HTTP only supported on the docker image |
+| template_resolver_config | {"base_url":"https://example.com/static/template-emails/" } | args to template_resolver_class |
+| email_transporter_class  | Email::Sender::Transport::SMTP::Persistent | Email::Sender::Transport::SMTP is also installed on docker |
+| email_transporter_config | {"sasl_password":"...","sasl_username":"apikey","port":"587","host":"smtp.sendgrid.net"} | args to  email_transporter_class |
+| delete_after             | 180 days | not implemented, emails are kept forever on docker version |
+
+#### emaildb_queue
+
+| column | type | comment |
+| ----- |----|-------|
+| id            | uuid |random uuid is fine |
+| config_id     | integer | FK to emaildb_config |
+| created_at    | timestamp without time zone |when email was first created |
+| template      | character varying |template to be passed to template_resolver_class |
+| to            | character varying |mailto |
+| subject       | character varying |subject (auto encoded to utf8) |
+| variables     | json | variables for interpolation on the template
+    if using double-encoded utf8, set VARIABLES_JSON_IS_UTF8=0 |
+| sent          | boolean | is message sent?
+    NULL = not tried yet
+    true - sent
+    false - failed |
+|updated_at    | timestamp without time zone | last changed at |
+|visible_after | timestamp without time zone | wait until this timestmap before seding |
+|errmsg        | character varying | if failed, whats the error message |
+
+To retry or resend, set both `errmsg` and `sent` to NULL, then trigger `NOTIFY newemail` or wait the next minute
+
 
 # ENV configuration
 
@@ -153,7 +149,7 @@ because the more workers you have, the more 'skiped rows' each worker will have,
     Set to 1 to if you are saving variables fields with correct UTF8 encoding
 
 
-# Reserved Variables (emaildb_queue)
+# Reserved Variables (emaildb_queue ones, not env)
 
     reply-to - set reply-to header
     :cc - set Cc header
@@ -162,4 +158,14 @@ because the more workers you have, the more 'skiped rows' each worker will have,
 
 Any variable starting with ':' should be also considered reserved for future use
 
+# Caveats
 
+This module uses Parallel::Prefork when 'pulling' the database queue; It is configured with `max_workers => 1`;
+Only increase this number if you are sending more than 400 emails/second (approximation based on speed of Text::Xslate, network on STMP may affect performance as well),
+because the more workers you have, the more 'skiped rows' each worker will have, so it will only waste CPU.
+
+
+# TODO
+
+- Optional Mojo::Template instead of Text::Xslate ?
+- Daemon to remove sent emails from database
