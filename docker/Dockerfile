@@ -22,7 +22,7 @@ USER root
 
 RUN apt-get update && apt-get install -y \
     libpq-dev \
-    postgresql-client \
+    libcurl4-openssl-dev postgresql-client \
  && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 ADD cpanfile /tmp/cpanfile
