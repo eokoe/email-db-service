@@ -8,7 +8,6 @@ requires 'Data::Validate::URI';
 requires 'Starman';
 requires 'Server::Starter';
 requires 'Net::Server::SS::PreFork';
-requires 'Redis';
 requires 'Class::Load';
 requires 'Email::Sender';
 requires 'Email::MIME';

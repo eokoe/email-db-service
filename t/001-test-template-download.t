@@ -3,7 +3,6 @@ use warnings;
 use Test::More;
 use Test::Fake::HTTPD;
 use JSON;
-use Redis;
 
 BEGIN { use_ok 'Shypper::SchemaConnected' }
 
@@ -30,7 +29,6 @@ $httpd->run(
     }
 );
 
-my $redis = Redis->new;
 my $schema = GET_SCHEMA;
 
 eval {
@@ -58,15 +56,7 @@ eval {
                 }
             );
 
-            my (@anykey) = $redis->keys($cache_prefix .'*');
-            is(scalar @anykey, 0, 'no keys on redis yet');
-
             is( $ec->get_template('abc'), $template_a, 'template downloading works!' );
-
-            (@anykey) = $redis->keys($cache_prefix .'*');
-            is(scalar @anykey, 1, 'one key on redis!');
-            ok ( $redis->ttl( $anykey[0] ) <= 10, 'less than 10 seconds to live' );
-
             is( $ec->get_template('header'), '123',        'header option is working' );
             is( $ec->get_template('agent'),  'otheragent', 'agent option is working' );
 

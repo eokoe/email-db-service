@@ -3,7 +3,6 @@ use warnings;
 use Test::More;
 use Test::Fake::HTTPD;
 use JSON;
-use Redis;
 
 BEGIN { use_ok 'Shypper::SchemaConnected' }
 BEGIN { use_ok 'Shypper::Daemon::ProcessQueue' }

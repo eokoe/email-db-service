@@ -1,0 +1,19 @@
+version: "3.5"
+services:
+
+  votolegal_api:
+    image: eokoe/emaildb:v2
+    restart: unless-stopped
+    env_file:
+      - .env
+    build:
+      context: ./
+      dockerfile: docker/Dockerfile
+    volumes:
+        - ./data-emaildb/:/data/
+        - ./:/src/
+    networks:
+        - yourdbnetwork
+
+networks:
+    yourdbnetwork:

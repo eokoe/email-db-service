@@ -1,5 +1,5 @@
 #!/bin/bash
-cp cpanfile docker/cpanfile
-docker build -t eokoe/emaildb docker/
+
+docker build -t eokoe/emaildb . -f docker/Dockerfile
 
 
