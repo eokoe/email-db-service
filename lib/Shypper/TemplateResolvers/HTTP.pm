@@ -5,20 +5,20 @@ use warnings;
 use Carp 'croak';
 use File::stat;
 
-has 'path' => ( is => 'rw' );
+has 'path' => (is => 'rw');
 
 my $read_binary = sub {
     my $filename = shift;
 
     open my $fh, '<:unix', $filename or croak "Couldn't open $filename: $!";
-    if ( my $size = -s $fh ) {
+    if (my $size = -s $fh) {
         my $buf;
-        my ( $pos, $read ) = 0;
+        my ($pos, $read) = 0;
         do {
-            defined( $read = read $fh, ${$buf}, $size - $pos, $pos )
+            defined($read = read $fh, ${$buf}, $size - $pos, $pos)
               or croak "Couldn't read $filename: $!";
             $pos += $read;
-        } while ( $read && $pos < $size );
+        } while ($read && $pos < $size);
         return ${$buf};
     }
     else {
@@ -35,11 +35,13 @@ my $write_binary = sub {
 };
 
 sub _get_path {
-    return join '/', $_[0]->path(), @_;
+    my ($self, $path) = @_;
+    $path =~ s/\///g;
+    return join '/', $self->path(), $path;
 }
 
 sub get {
-    my ( $self, $key, $ttl ) = @_;
+    my ($self, $key, $ttl) = @_;
 
     my $path = $self->_get_path($key);
     return if !-e $path;
@@ -52,13 +54,13 @@ sub get {
 }
 
 sub set {
-    my ( $self, $key, $data ) = @_;
+    my ($self, $key, $data) = @_;
     my $path = $self->_get_path($key);
 
-    $write_binary->( $path . '.tmp', $data );
+    $write_binary->($path . '.tmp', $data);
 
     # not really, but works fine 99.99% if same filesystem
-    rename( $path . '.tmp', $path ) or die "cannot rename $path $!";
+    rename($path . '.tmp', $path) or die "cannot rename $path $!";
 }
 
 package Shypper::TemplateResolvers::HTTP;
@@ -72,58 +74,58 @@ use Digest::MD5 qw/md5_hex/;
 use JSON;
 use Encode;
 
-has 'logger'        => ( is => 'rw', lazy    => 1, builder => \&get_logger );
-has 'cache_path'    => ( is => 'rw', default => sub { '/tmp/' } );
-has 'base_url'      => ( is => 'rw' );
-has 'headers'       => ( is => 'rw' );
-has 'cache_prefix'  => ( is => 'rw', default => 'shypper-template-' );
-has 'cache_timeout' => ( is => 'rw', default => '60' );
+has 'logger'        => (is => 'rw', lazy    => 1, builder => \&get_logger);
+has 'cache_path'    => (is => 'rw', default => sub {'/tmp/'});
+has 'base_url'      => (is => 'rw');
+has 'headers'       => (is => 'rw');
+has 'cache_prefix'  => (is => 'rw', default => 'shypper-template-');
+has 'cache_timeout' => (is => 'rw', default => '60');
 
-has 'furl_opts' => ( is => 'rw', default => sub { +{} } );
+has 'furl_opts' => (is => 'rw', default => sub { +{} });
 
-has '_furl'  => ( is => 'rw', lazy => 1, builder => '_build_furl' );
-has '_redis' => ( is => 'rw', lazy => 1, builder => '_build_notredis' );
+has '_furl'  => (is => 'rw', lazy => 1, builder => '_build_furl');
+has '_redis' => (is => 'rw', lazy => 1, builder => '_build_notredis');
 
 sub _build_furl {
     Furl->new(
         timeout => 60,
         agent   => 'Emaildb/TemplateResolversHTTP ' . $Shypper::VERSION,
-        %{ shift->furl_opts() }
+        %{shift->furl_opts()}
     );
 }
 
 sub _build_notredis {
-    NotRedis->new( path => $self->cache_path, );
+    my $self = shift;
+    NotRedis->new(path => $self->cache_path,);
 }
 
 sub get_template {
-    my ( $self, $template ) = @_;
+    my ($self, $template) = @_;
 
     my $url = $self->base_url;
     $url .= '/' unless $url =~ /\/$/;
     $url .= $template;
 
     my $cachekey = $self->cache_prefix() . md5_hex($url);
-    my $cached   = $self->_redis->get( $cachekey, $self->cache_timeout );
+    my $cached   = $self->_redis->get($cachekey, $self->cache_timeout);
 
     if ($cached) {
-        $cached = decode( 'UTF-8', $cached );
+        $cached = decode('UTF-8', $cached);
     }
     else {
         my $headers = $self->headers || [];
         $self->logger->debug("Downloading '$url'");
-        my $res = $self->_furl->get( $url, $headers );
+        my $res = $self->_furl->get($url, $headers);
 
         $self->logger->logdie(
-            'Downloading template failed '
-              . encode_json(
-                { map { $_ => $res->$_ } qw/code decoded_content/ }
-              )
-        ) unless $res->is_success;
+            'Downloading template failed ' . encode_json({map { $_ => $res->$_ } qw/code decoded_content/}))
+          unless $res->is_success;
 
         $cached = $res->decoded_content;
-        $self->_redis->set( $cachekey,
-            encode( 'UTF-8', $res->decoded_content ) );
+        $self->_redis->set(
+            $cachekey,
+            encode('UTF-8', $res->decoded_content)
+        );
     }
 
     return $cached;
