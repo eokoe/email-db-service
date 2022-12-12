@@ -38,3 +38,5 @@ RUN mkdir /etc/service/app
 COPY docker/app.sh /etc/service/app/run
 
 COPY . /src/
+
+RUN chown 1000:1000 /src/ -R
