@@ -36,3 +36,5 @@ ENV VARIABLES_JSON_IS_UTF8=1
 
 RUN mkdir /etc/service/app
 COPY docker/app.sh /etc/service/app/run
+
+COPY . /src/

@@ -148,6 +148,9 @@ To retry or resend, set both `errmsg` and `sent` to NULL, then trigger `NOTIFY n
 
     Set to 1 to if you are saving variables fields with correct UTF8 encoding
 
+- USE_STDOUT
+
+    Set to 1 to disable log files (useful for k8s)
 
 # Reserved Variables (emaildb_queue ones, not env)
 
