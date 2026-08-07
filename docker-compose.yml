@@ -1,15 +1,16 @@
-version: "3.5"
+version: "3.7"
 services:
 
   emaildb_example:
     image: renatocron/email-db-service:latest
     restart: unless-stopped
+    # reaps the Parallel::Prefork children, the daemon itself is pid 1
+    init: true
     env_file:
       - .env
     build:
       context: ./
-    volumes:
-      - ./data-emaildb/:/data/
+    # logs go to stdout (USE_STDOUT=1 on the image), no volume needed
     networks:
       - yourdbnetwork
 

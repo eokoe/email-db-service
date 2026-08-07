@@ -42,7 +42,7 @@ All ops setting are set via env variables ([check file](.env)) for more info or 
 
 Dynamic configs are set via tables, see bellow:
 
-Use `$ sqitch deploy` to deploy the necessary tables on your database. Or copy/paste from [email-db-service/deploy_db/deploy/0000-firstversion.sql](email-db-service/deploy_db/deploy/0000-firstversion.sql) and run on your postgres.
+Use `$ sqitch deploy` to deploy the necessary tables on your database. Or copy/paste from [email-db-service/deploy_db/deploy/0000-firstversion.sql](email-db-service/deploy_db/deploy/0000-firstversion.sql) and run on your postgres, followed by [0001-config-variables-url.sql](deploy_db/deploy/0001-config-variables-url.sql).
 
 Insert on `public.emaildb_config` to your needs.
 
@@ -80,6 +80,21 @@ with docker
 
     ./sample--run_container.sh
 
+The image is a two stage build on top of the official `perl:5.40-slim-bookworm`:
+the compilers and the `-dev` headers live in the build stage and only the
+installed modules are copied to the runtime one. Nothing compiles perl itself,
+so a cold build takes a few minutes instead of the perlbrew build it replaced.
+
+There is no runit/my_init supervisor anymore, the daemon is pid 1 (it already
+traps TERM/HUP). Run it with `--init` - or `init: true`, already set on
+docker-compose.yml - so the Parallel::Prefork children get reaped.
+
+Run the test suite against a postgres of your own with:
+
+    docker run --rm --network host -e EMAILDB_DB_HOST=127.0.0.1 -e EMAILDB_DB_PORT=5432 \
+        -e EMAILDB_DB_USER=postgres -e EMAILDB_DB_PASS=... -e EMAILDB_DB_NAME=emaildb_dev \
+        <image> prove -Ilib t/
+
 If you are using `EMAILDB_DB_HOST=172.17.0.1` you may have to configure your firewall to allow connections from containers to your database.
 Starting the database before `dockerd` is enssenstial for this to work reliably, prefer to use dedicated host or move db to a docker container.
 
@@ -94,8 +109,63 @@ Starting the database before `dockerd` is enssenstial for this to work reliably,
 | template_resolver_class  | Shypper::TemplateResolvers::HTTP | Shypper::TemplateResolvers::HTTP only supported on the docker image |
 | template_resolver_config | {"base_url":"https://example.com/static/template-emails/" } | args to template_resolver_class |
 | email_transporter_class  | Email::Sender::Transport::SMTP::Persistent | Email::Sender::Transport::SMTP is also installed on docker |
-| email_transporter_config | {"sasl_password":"...","sasl_username":"apikey","port":"587","host":"smtp.sendgrid.net"} | args to  email_transporter_class |
+| email_transporter_config | {"sasl_password":"${SMTP_PASS}","sasl_username":"apikey","port":"587","host":"smtp.sendgrid.net"} | args to  email_transporter_class |
+| variables_url            | https://example.com/emaildb-vars.json | optional, polled once per boot for config-wide template variables |
+| variables_url_config     | {"namespace":"cfg"} | options for variables_url |
 | delete_after             | 180 days | not implemented, emails are kept forever on docker version |
+
+## Config variables (variables_url)
+
+Values that belong to the config and not to each e-mail - the site base url, the
+domain, the support address - do not need to be repeated on every insert of
+`emaildb_queue.variables`.
+
+Point `variables_url` at an endpoint answering a json object and it is polled
+**once per boot** (during prewarm, before forking), then exposed to every
+template of that config under its own namespace:
+
+    variables_url        = https://example.com/emaildb-vars.json
+    variables_url_config = {"namespace":"cfg"}
+
+    the endpoint answers  {"site_url":"https://app.example.com","support":"help@example.com"}
+
+    template: <a href="[% cfg.site_url %]/u/[% user_id %]">open</a> - [% cfg.support %]
+                          ^ from the webhook       ^ from emaildb_queue.variables
+
+Domains are stable, so polling at boot is enough - restart the container (or
+`docker-compose restart`) to pick up a change.
+
+`variables_url_config` options:
+
+    namespace - default 'cfg' - the key the object is exposed under
+    headers   - no default, array, eg: ["authorization", "Bearer ${API_TOKEN}"]
+    timeout   - default 30 - seconds
+    required  - default true - when false, a failed poll only logs and uses 'defaults'
+    defaults  - no default, hash, values for the keys the webhook did not answer
+
+The namespace key is written *after* the row variables are read, so an e-mail
+cannot forge `cfg` by inserting a variable with that name.
+
+## ${ENV_VAR} on the config columns
+
+So a url or a password does not have to be written in the database, the config
+columns expand shell-like placeholders from the daemon environment:
+
+    ${NAME}             dies at boot, naming the variable, if NAME is unset or empty
+    ${NAME:-fallback}   uses fallback if NAME is unset or empty
+    $${NAME}            escape, stays the literal ${NAME}
+
+It is applied to `from`, `template_resolver_config`, `email_transporter_config`,
+`variables_url` and to the `headers`/`timeout` of `variables_url_config`.
+
+It is **never** applied to `emaildb_queue.variables`, to `variables_url_config.defaults`,
+to whatever the webhook answers, nor to the templates: those are e-mail content,
+and the environment must not be reachable from an e-mail. The two features are
+separate on purpose.
+
+    "from":                     '"${MAIL_BRAND} Notifications" <no-reply@example.com>'
+    "email_transporter_config": {"host":"smtp.sendgrid.net","sasl_username":"apikey","sasl_password":"${SMTP_PASS}"}
+    "template_resolver_config": {"base_url":"${TEMPLATE_BASE_URL}"}
 
 #### emaildb_queue
 
@@ -150,7 +220,12 @@ To retry or resend, set both `errmsg` and `sent` to NULL, then trigger `NOTIFY n
 
 - USE_STDOUT
 
-    Set to 1 to disable log files (useful for k8s)
+    Set to 1 to disable log files (useful for k8s and docker in general)
+
+    **The docker image sets it to 1**, so logs go to stdout and no `/data` mount
+    is needed. Set it to an empty value if you want the old
+    `/data/log/email.log` + `/data/log/email.error.log` files back - then you do
+    need a writable `/data` volume.
 
 # Reserved Variables (emaildb_queue ones, not env)
 
@@ -158,8 +233,26 @@ To retry or resend, set both `errmsg` and `sent` to NULL, then trigger `NOTIFY n
     :cc - set Cc header
     :bcc - set Bcc header
     :txt - generate text version from HTML using HTML::FormatText::WithLinks, [may reduce spamassassin score ~ 1 point]
+    attachments_config - {"files":[{"name":"a.pdf","content_type":"application/pdf","content":"<base64>","disposition":"attachment"}]}
+        disposition is optional and defaults to 'inline' (what this service always sent);
+        use "attachment" for the paperclip instead of a part inlined in the body
 
 Any variable starting with ':' should be also considered reserved for future use
+
+The `variables_url` namespace (`cfg` by default) is reserved as well: it is
+overwritten with the config variables right before rendering.
+
+# Template syntax
+
+Templates are rendered by Text::Xslate in `TTerse` syntax, which is a subset of
+Template Toolkit - `[% var %]`, `[% obj.field %]`, `[% x | raw %]`,
+`[% IF %]/[% ELSIF %]/[% ELSE %]/[% END %]` and `[% FOREACH x IN list %]` all
+behave like TT2.
+
+The one difference worth remembering: **methods need the parenthesis**.
+
+    [% IF orders.size > 0 %]     renders nothing, silently takes the ELSE branch
+    [% IF orders.size() > 0 %]   works
 
 # Caveats
 

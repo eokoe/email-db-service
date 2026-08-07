@@ -1,9 +1,10 @@
 requires 'Furl';
+requires 'IO::Socket::SSL';
 requires 'Moo';
+requires 'JSON';
 requires 'Log::Log4perl';
 requires 'DBD::Pg';
 requires 'DBIx::Class::InflateColumn::DateTime';
-requires 'Data::Validate::URI';
 requires 'Class::Load';
 requires 'Email::Sender';
 requires 'Email::MIME';
@@ -17,7 +18,6 @@ requires 'Email::Sender::Transport::SMTP::TLS';
 requires 'HTML::FormatText::WithLinks';
 
 on test => sub {
-    requires 'JSON', '2.34';
     requires 'Test::More', '0.96';
 
     requires 'DBIx::Class::Schema::Loader';

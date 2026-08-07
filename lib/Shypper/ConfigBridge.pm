@@ -20,6 +20,9 @@ sub prewarm_configs {
         # just load template_resolver() on before forking..
         $cf->template_resolver();
         $cf->email_transporter();
+
+        # polls variables_url once, here, so every worker inherits the same answer
+        $cf->config_variables();
     }
 
     return 1;
@@ -37,6 +40,7 @@ sub get_config {
 
     $configs->{$id}->template_resolver();
     $configs->{$id}->email_transporter();
+    $configs->{$id}->config_variables();
 
     return $configs->{$id};
 }

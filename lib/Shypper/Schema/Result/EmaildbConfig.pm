@@ -140,12 +140,24 @@ __PACKAGE__->has_many(
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:JsbyMKflrqllTTLA8Q0RFQ
 
 use Moo;
+use Shypper;
 use Shypper::TemplateResolvers::HTTP;
+use Shypper::Logger;
+use Shypper::EnvSubst qw/env_subst env_subst_deep/;
 
 use Email::Simple;
 
 use Class::Load qw/load_class/;
 use JSON qw/decode_json/;
+use Furl;
+
+# added after the schema was first generated (sqitch change 0001-config-variables-url)
+__PACKAGE__->add_columns(
+    "variables_url",
+    { data_type => "varchar", is_nullable => 1 },
+    "variables_url_config",
+    { data_type => "json", default_value => "{}", is_nullable => 0 },
+);
 
 has 'template_resolver' => ( is => 'rw', lazy => 1, builder => '_build_template_resolver' );
 
@@ -156,6 +168,8 @@ sub _build_template_resolver {
     my $cnf   = decode_json( $self->template_resolver_config );
 
     die 'template_resolver_config must be a hash ref' unless ref $cnf eq 'HASH';
+
+    $cnf = env_subst_deep( $cnf, context => 'emaildb_config.id=' . $self->id . ' template_resolver_config' );
 
     load_class($class);
 
@@ -174,10 +188,112 @@ sub _build_email_transporter {
 
     die 'email_transporter_config must be a hash ref' unless ref $cnf eq 'HASH';
 
+    $cnf = env_subst_deep( $cnf, context => 'emaildb_config.id=' . $self->id . ' email_transporter_config' );
+
     load_class($class);
 
     return $class->new( %{$cnf} );
 
+}
+
+# the From: header, with ${ENV_VAR} expanded
+sub from_env {
+    my ($self) = @_;
+
+    return env_subst( $self->from, context => 'emaildb_config.id=' . $self->id . ' from' );
+}
+
+=head2 config_variables
+
+Variables that belong to the config itself (base urls, domain names, support
+address...) instead of to each e-mail. They come from the C<variables_url>
+webhook, polled B<once per boot> (during ConfigBridge prewarm, before forking).
+
+C<variables_url_config> options:
+
+    namespace - default 'cfg' - key the hash is exposed under to the template
+    headers   - no default, array, eg: ["authorization", "Bearer ${API_TOKEN}"]
+    timeout   - default 30 - seconds
+    required  - default true - when false, a failed poll logs and falls back to 'defaults'
+    defaults  - no default, hash, values used for the keys the webhook did not return
+
+${ENV_VAR} is expanded on 'url', 'headers' and 'timeout' only. It is B<not>
+expanded on 'defaults' nor on whatever the webhook answers: those are template
+variables, and the environment must not leak into an e-mail.
+
+=cut
+
+has 'config_variables' => ( is => 'rw', lazy => 1, builder => '_build_config_variables' );
+
+sub variables_options {
+    my ($self) = @_;
+
+    my $opts = decode_json( $self->variables_url_config || '{}' );
+    die 'variables_url_config must be a hash ref' unless ref $opts eq 'HASH';
+
+    return $opts;
+}
+
+sub variables_namespace {
+    my ($self) = @_;
+
+    return $self->variables_options->{namespace} || 'cfg';
+}
+
+sub _build_config_variables {
+    my ($self) = @_;
+
+    my $url = $self->variables_url;
+    return {} unless defined $url && $url =~ /\S/;
+
+    my $logger  = get_logger;
+    my $context = 'emaildb_config.id=' . $self->id . ' variables_url';
+    my $opts    = $self->variables_options;
+
+    my $defaults = $opts->{defaults} || {};
+    die 'variables_url_config.defaults must be a hash ref' unless ref $defaults eq 'HASH';
+
+    my $required = exists $opts->{required} ? $opts->{required} ? 1 : 0 : 1;
+
+    $url = env_subst( $url, context => $context );
+    my $headers = env_subst_deep( $opts->{headers} || [], context => $context . '_config.headers' );
+    my $timeout = env_subst( $opts->{timeout} || 30, context => $context . '_config.timeout' );
+
+    my $vars = eval {
+        $logger->info("Polling config variables of emaildb_config.id=${\$self->id} from '$url'");
+
+        my $res = Furl->new(
+            timeout => $timeout,
+            agent   => 'Emaildb/ConfigVariables ' . $Shypper::VERSION,
+        )->get( $url, $headers );
+
+        die sprintf( "http status %s: %s\n", $res->code, $res->decoded_content ) unless $res->is_success;
+
+        # json is utf8 by definition, so the raw body is what decode_json wants
+        my $parsed = decode_json( $res->content );
+        die "webhook must answer a json object\n" unless ref $parsed eq 'HASH';
+
+        $parsed;
+    };
+
+    if ($@) {
+        my $err = "Cannot poll $context '$url': $@";
+        $logger->logcroak($err) if $required;
+
+        $logger->error( $err . ' - falling back to variables_url_config.defaults' );
+        $vars = {};
+    }
+
+    return { %$defaults, %$vars };
+}
+
+# forces the next read to poll the webhook again
+sub refresh_config_variables {
+    my ($self) = @_;
+
+    $self->config_variables( $self->_build_config_variables );
+
+    return $self->config_variables;
 }
 
 sub get_template {

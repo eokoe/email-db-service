@@ -232,6 +232,11 @@ sub _send_email {
         my $gen_text           = delete $vars->{':txt'} || $ENV{USE_TXT_DEFAULT};
         my $attachments_config = delete $vars->{'attachments_config'};
 
+        # config-wide variables (polled from variables_url at boot) always win over
+        # the row ones on their own namespace, so an e-mail cannot forge them
+        my $config_variables = $config->config_variables;
+        $vars->{ $config->variables_namespace } = $config_variables if %$config_variables;
+
         my $base_template = $config->get_template($row->{template})
           || $self->logger->logcroak("Template ${\$row->{template}} not found!");
 
@@ -248,10 +253,19 @@ sub _send_email {
         $self->logger->debug("reply-to $reply") if $reply;
         $self->logger->debug("Bcc $bcc")        if $bcc;
 
-        my @parts;
+        my $html_part = Email::MIME->create(
+            attributes => {
+                content_type => "text/html",
+                charset      => "UTF-8",
+                encoding     => 'quoted-printable',
+            },
+            body_str => $body,
+        );
+
+        my $body_part = $html_part;
 
         if ($gen_text) {
-            my $text_email = Email::MIME->create(
+            my $text_part = Email::MIME->create(
                 attributes => {
                     content_type => "text/plain",
                     charset      => "UTF-8",
@@ -260,37 +274,15 @@ sub _send_email {
                 body_str => $gen_text,
             );
 
-            my $html_email = Email::MIME->create(
-                attributes => {
-                    content_type => "text/html",
-                    charset      => "UTF-8",
-                    encoding     => 'quoted-printable',
-                },
-                body_str => $body,
-            );
-
-
-            $text_email->parts_set(
-                [
-                    $text_email->parts,
-                    $html_email,
-                ],
-            );
-
-            $text_email->content_type_set('multipart/alternative');
-            push @parts, $text_email;
-        }
-        else {
-
-            push @parts, Email::MIME->create(
-                attributes => {
-                    content_type => "text/html",
-                    charset      => "UTF-8",
-                    encoding     => 'quoted-printable',
-                },
-                body_str => $body,
+            # two parts on create(), so Email::MIME generates the boundary itself;
+            # nesting it later inside a one-part message would drop that boundary
+            $body_part = Email::MIME->create(
+                attributes => {content_type => 'multipart/alternative'},
+                parts      => [$text_part, $html_part],
             );
         }
+
+        my @attachments;
 
         if ($attachments_config) {
             my $conf = $attachments_config;
@@ -298,12 +290,17 @@ sub _send_email {
             foreach my $attachment (@{$conf->{files}}) {
                 my $binary = decode_base64($attachment->{content});
 
-                push @parts, Email::MIME->create(
+                push @attachments, Email::MIME->create(
                     attributes => {
                         filename     => $attachment->{name}         || 'attachment',
                         content_type => $attachment->{content_type} || 'application/octet-stream',
                         encoding     => "base64",
                         name         => $attachment->{name} || 'attachment',
+
+                        # 'inline' is Email::MIME's default and what this service
+                        # always sent; set "disposition":"attachment" per file to
+                        # get the paperclip instead of an inlined part
+                        $attachment->{disposition} ? (disposition => $attachment->{disposition}) : (),
                     },
                     body => $binary,
                 );
@@ -312,16 +309,31 @@ sub _send_email {
 
         }
 
+        my $compose = sub {
+            my (@headers) = @_;
+
+            return Email::MIME->create(
+                header_str => [@headers],
+                attributes => {content_type => 'multipart/mixed'},
+                parts      => [$body_part, @attachments],
+            ) if @attachments;
+
+            # without attachments the body part *is* the message: it is cloned so
+            # each copy gets its own headers, keeping its content-type intact
+            my $msg = Email::MIME->new($body_part->as_string);
+            while (my ($name, $value) = splice(@headers, 0, 2)) {
+                $msg->header_str_set($name, $value);
+            }
+            return $msg;
+        };
+
         $step = 'Email::MIME create';
-        my $email = Email::MIME->create(
-            header_str => [
-                From    => $config->from(),
-                To      => $row->{to},
-                Subject => $row->{subject},
-                $reply ? ('Reply-To' => $reply) : (),
-                $cc    ? ('Cc'       => $cc)    : (),
-            ],
-            parts => [@parts],
+        my $email = $compose->(
+            From    => $config->from_env(),
+            To      => $row->{to},
+            Subject => $row->{subject},
+            $reply ? ('Reply-To' => $reply) : (),
+            $cc    ? ('Cc'       => $cc)    : (),
         );
 
         $step = 'send message';
@@ -330,21 +342,16 @@ sub _send_email {
         $ok = 1;
 
         if ($bcc) {
-            my $email = Email::MIME->create(
-                header_str => [
-                    From    => $config->from(),
-                    To      => $bcc,
-                    Subject => 'BCC: ' . $row->{subject} . ': To ' . $row->{to} . ($cc ? ' Copy ' . $cc : ''),
-                    $reply ? ('Reply-To' => $reply) : (),
-                ],
-                parts => [@parts],
+            my $email = $compose->(
+                From    => $config->from_env(),
+                To      => $bcc,
+                Subject => 'BCC: ' . $row->{subject} . ': To ' . $row->{to} . ($cc ? ' Copy ' . $cc : ''),
+                $reply ? ('Reply-To' => $reply) : (),
             );
-            if ($gen_text) {
-                $email->content_type_set('multipart/alternative');
-            }
+
             $step = 'send message bcc';
 
-            eval { sendmail($email, {transport => $config->email_transporter()}) };
+            eval { sendmail($email->as_string, {transport => $config->email_transporter()}) };
             if ($@) {
                 $self->logger->error("BCC ${\$row->{id}} Errored at $step with msg $@");
             }

@@ -1,0 +1,7 @@
+.git
+.github
+.vscode
+.vstags
+data-emaildb
+*_local*
+sample--*
