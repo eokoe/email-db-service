@@ -144,6 +144,7 @@ use Shypper;
 use Shypper::TemplateResolvers::HTTP;
 use Shypper::Logger;
 use Shypper::EnvSubst qw/env_subst env_subst_deep/;
+use Shypper::SchemaFeatures qw/has_schema_feature/;
 
 use Email::Simple;
 
@@ -151,7 +152,9 @@ use Class::Load qw/load_class/;
 use JSON qw/decode_json/;
 use Furl;
 
-# added after the schema was first generated (sqitch change 0001-config-variables-url)
+# added after the schema was first generated (sqitch change 0001-config-variables-url).
+# Shypper::SchemaFeatures removes them again from the result source when the
+# database is older than the code, see has_schema_feature('config_variables').
 __PACKAGE__->add_columns(
     "variables_url",
     { data_type => "varchar", is_nullable => 1 },
@@ -221,12 +224,17 @@ ${ENV_VAR} is expanded on 'url', 'headers' and 'timeout' only. It is B<not>
 expanded on 'defaults' nor on whatever the webhook answers: those are template
 variables, and the environment must not leak into an e-mail.
 
+On a database that never got the C<0001-config-variables-url> sqitch change this
+returns an empty hash and nothing is polled - see L<Shypper::SchemaFeatures>.
+
 =cut
 
 has 'config_variables' => ( is => 'rw', lazy => 1, builder => '_build_config_variables' );
 
 sub variables_options {
     my ($self) = @_;
+
+    return {} unless has_schema_feature('config_variables');
 
     my $opts = decode_json( $self->variables_url_config || '{}' );
     die 'variables_url_config must be a hash ref' unless ref $opts eq 'HASH';
@@ -242,6 +250,8 @@ sub variables_namespace {
 
 sub _build_config_variables {
     my ($self) = @_;
+
+    return {} unless has_schema_feature('config_variables');
 
     my $url = $self->variables_url;
     return {} unless defined $url && $url =~ /\S/;

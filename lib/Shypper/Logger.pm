@@ -13,7 +13,7 @@ Log::Log4perl->easy_init(
 
 our @ISA = qw(Exporter);
 
-our @EXPORT = qw(log_info log_fatal log_error get_logger);
+our @EXPORT = qw(log_info log_warn log_fatal log_error get_logger);
 
 my $logger = get_logger;
 
@@ -21,6 +21,11 @@ my $logger = get_logger;
 sub log_info {
     my (@texts) = @_;
     $logger->info( join ' ', @texts );
+}
+
+sub log_warn {
+    my (@texts) = @_;
+    $logger->warn( join ' ', @texts );
 }
 
 sub log_error {

@@ -69,13 +69,35 @@ eval {
                 return @sent;
             };
 
-            # ---- html only -------------------------------------------------
+            # ---- html only, asked for by the row ----------------------------
 
-            my ($html) = $send->( { name => 'x' } );
+            my ($html) = $send->( { name => 'x', ':txt' => 0 } );
             like( $html->header('Content-Type'), qr{^text/html}, 'html only: single text/html message' );
             like( $html->body_str, qr{hello</a> x}, 'html only: body' );
             ok( $html->header('Date'),         'html only: has Date' );
             ok( $html->header('MIME-Version'), 'html only: has MIME-Version' );
+
+            for my $off ( JSON::false, 'false', 'no', 'off', '' ) {
+                my ($only) = $send->( { name => 'x', ':txt' => $off } );
+                like( $only->header('Content-Type'), qr{^text/html}, "html only: ':txt' => '$off' turns it off too" );
+            }
+
+            # ---- html only, asked for by the daemon -------------------------
+
+            {
+                local $ENV{USE_TXT_DEFAULT} = 0;
+
+                my ($env_off) = $send->( { name => 'x' } );
+                like( $env_off->header('Content-Type'), qr{^text/html}, 'USE_TXT_DEFAULT=0: html only' );
+
+                my ($row_wins) = $send->( { name => 'x', ':txt' => 1 } );
+                check_multipart( $row_wins, 'multipart/alternative', 'USE_TXT_DEFAULT=0 but the row asked for text' );
+            }
+
+            # ---- the default ------------------------------------------------
+
+            my ($by_default) = $send->( { name => 'x' } );
+            check_multipart( $by_default, 'multipart/alternative', 'default' );
 
             # ---- :txt ------------------------------------------------------
 
@@ -90,6 +112,7 @@ eval {
             my ($mixed) = $send->(
                 {
                     name               => 'x',
+                    ':txt'             => 0,
                     attachments_config => {
                         files => [ { name => 'a.txt', content_type => 'text/plain', content => encode_base64('file body'), disposition => 'attachment' } ]
                     }

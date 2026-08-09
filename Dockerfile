@@ -37,7 +37,8 @@ RUN useradd -ms /bin/bash -u 1000 app \
  && mkdir -p /data/log \
  && chown -R app:app /data
 
-ENV VARIABLES_JSON_IS_UTF8=1
+# VARIABLES_JSON_IS_UTF8 is on by default now, set it to 0 only if this database
+# was filled with double-encoded utf8 by an old client.
 
 # logs go to stdout, so no /data mount is needed. set USE_STDOUT= (empty) to get
 # the old /data/log/email.log files back - that one does need the volume.

@@ -2,7 +2,7 @@ version: "3.7"
 services:
 
   emaildb_example:
-    image: renatocron/email-db-service:latest
+    image: ghcr.io/eokoe/email-db-service:latest
     restart: unless-stopped
     # reaps the Parallel::Prefork children, the daemon itself is pid 1
     init: true

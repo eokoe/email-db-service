@@ -213,6 +213,34 @@ sub listen_queue {
 
 }
 
+# '0', 'no', 'false', 'off' and the empty string turn a flag off, anything else on
+sub _flag_is_on {
+    my ($v) = @_;
+
+    return 0 unless defined $v;
+    return length("$v") && "$v" !~ /^(?:0|no|false|off)$/i ? 1 : 0;
+}
+
+sub _env_flag {
+    my ( $name, $default ) = @_;
+
+    return defined $ENV{$name} ? _flag_is_on( $ENV{$name} ) : $default;
+}
+
+# a json column holds correct utf8, so this is the default now. Only a database
+# that was filled with double-encoded variables needs VARIABLES_JSON_IS_UTF8=0.
+sub _variables_json_is_utf8 { _env_flag( 'VARIABLES_JSON_IS_UTF8', 1 ) }
+
+# the text/plain alternative is generated for every e-mail unless this row, or
+# the whole daemon, asks for html only
+sub _generate_text {
+    my ($row_value) = @_;
+
+    return _flag_is_on($row_value) if defined $row_value;
+
+    return _env_flag( 'USE_TXT_DEFAULT', 1 );
+}
+
 sub _send_email {
     my ($self, $row, $update_row) = @_;
 
@@ -224,12 +252,12 @@ sub _send_email {
         my $config = $self->config_bridge->get_config($row->{config_id});
         my $vars
           = $row->{variables}
-          ? ($ENV{VARIABLES_JSON_IS_UTF8} ? from_json($row->{variables}) : decode_json($row->{variables}))
+          ? (_variables_json_is_utf8() ? from_json($row->{variables}) : decode_json($row->{variables}))
           : {};
         my $reply              = delete $vars->{'reply-to'};
         my $cc                 = delete $vars->{':cc'};
         my $bcc                = delete $vars->{':bcc'};
-        my $gen_text           = delete $vars->{':txt'} || $ENV{USE_TXT_DEFAULT};
+        my $gen_text           = _generate_text( delete $vars->{':txt'} );
         my $attachments_config = delete $vars->{'attachments_config'};
 
         # config-wide variables (polled from variables_url at boot) always win over
@@ -397,10 +425,8 @@ sub _text_from_html {
         footnote    => ''
     );
 
-    my $text = $f->parse($html);
-
-    #$text = encode('utf8', $text);
-    return $text;
+    # characters, not bytes: Email::MIME encodes it from body_str + charset
+    return $f->parse($html);
 }
 
 1;

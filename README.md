@@ -44,15 +44,34 @@ Dynamic configs are set via tables, see bellow:
 
 Use `$ sqitch deploy` to deploy the necessary tables on your database. Or copy/paste from [email-db-service/deploy_db/deploy/0000-firstversion.sql](email-db-service/deploy_db/deploy/0000-firstversion.sql) and run on your postgres, followed by [0001-config-variables-url.sql](deploy_db/deploy/0001-config-variables-url.sql).
 
+**Migrations are never applied automatically**, the service only reads your
+database. Because of that it checks, at boot, which optional columns are
+actually there: a database that never got a change keeps working, with the
+feature that needs it turned off and a warning on the log telling you which
+`sqitch deploy` would turn it on. Today that covers:
+
+| sqitch change | columns | feature, when missing |
+| --- | --- | --- |
+| 0001-config-variables-url | `emaildb_config.variables_url`, `emaildb_config.variables_url_config` | the per-config variables webhook is not polled, `config_variables` is empty |
+
 Insert on `public.emaildb_config` to your needs.
 
 When an insert occurs on `emaildb_queue` this service will send it.
 
 # Starting this service
 
+The image is published to the GitHub Container Registry on every push to `master`,
+tagged `latest` and with the commit sha. It is public, no login needed:
+
+    docker pull ghcr.io/eokoe/email-db-service:latest
+
+    # or pin a version you can roll back to
+    docker pull ghcr.io/eokoe/email-db-service:<commit-sha>
+
 with docker-compose
 
-    docker-compose build
+    # pulls the published image, or use `build` to compile your own
+    docker-compose pull
 
     # edit .env
 
@@ -178,7 +197,7 @@ separate on purpose.
 | to            | character varying |mailto |
 | subject       | character varying |subject (auto encoded to utf8) |
 | variables     | json | variables for interpolation on the template
-    if using double-encoded utf8, set VARIABLES_JSON_IS_UTF8=0 |
+    correct utf8 is assumed, if using double-encoded utf8 set VARIABLES_JSON_IS_UTF8=0 |
 | sent          | boolean | is message sent?
     NULL = not tried yet
     true - sent
@@ -208,15 +227,26 @@ To retry or resend, set both `errmsg` and `sent` to NULL, then trigger `NOTIFY n
 
     Set this if you want to recycle workers after that many emails have been processed.
 
-    Included after option have text email generated from html, as a potentially memory-leak module was added to make this conversion (HTML::FormatText::WithLinks / HTML::TreeBuilder)
+    It was added when the html to text conversion was suspected of leaking
+    (HTML::FormatText::WithLinks / HTML::TreeBuilder). That is no longer the
+    case: 0.15 deletes the tree it builds, and a worker measured over 1000
+    conversions grew 20kB. You should not need this option anymore.
 
-- $ENV{USE_TXT_DEFAULT}=''
+- $ENV{USE_TXT_DEFAULT}=1
 
-    Set to 1 to generate text from text by default
+    On by default: every e-mail gets a text/plain alternative generated from the
+    html, which is friendlier to text clients and worth about one spamassassin
+    point. It costs cpu on each e-mail, and that grows with the template
+    (~3ms for a 2kB template, ~15ms for a 10kB one), so set it to `0` if you send
+    big templates in volume and would rather not pay for it.
 
-- $ENV{VARIABLES_JSON_IS_UTF8}=''
+    A single e-mail overrides it either way with the `:txt` variable.
 
-    Set to 1 to if you are saving variables fields with correct UTF8 encoding
+- $ENV{VARIABLES_JSON_IS_UTF8}=1
+
+    On by default: a `json` column holds correct UTF8, which is what postgres
+    stores. Set it to `0` only if an old client filled your database with
+    double-encoded variables.
 
 - USE_STDOUT
 
@@ -233,6 +263,8 @@ To retry or resend, set both `errmsg` and `sent` to NULL, then trigger `NOTIFY n
     :cc - set Cc header
     :bcc - set Bcc header
     :txt - generate text version from HTML using HTML::FormatText::WithLinks, [may reduce spamassassin score ~ 1 point]
+        on by default, see USE_TXT_DEFAULT. Set it to 0 (or false/no/off) on this
+        e-mail for a html only message, or to 1 when the daemon has it turned off
     attachments_config - {"files":[{"name":"a.pdf","content_type":"application/pdf","content":"<base64>","disposition":"attachment"}]}
         disposition is optional and defaults to 'inline' (what this service always sent);
         use "attachment" for the paperclip instead of a part inlined in the body

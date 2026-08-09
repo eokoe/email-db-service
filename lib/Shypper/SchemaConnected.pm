@@ -3,6 +3,7 @@ use strict;
 use utf8;
 
 use Shypper::Logger;
+use Shypper::SchemaFeatures;
 require Exporter;
 
 our @ISA = qw(Exporter);
@@ -29,7 +30,7 @@ sub GET_SCHEMA {
     my $db_user = $ENV{EMAILDB_DB_USER} || 'postgres';
     my $db_name = $ENV{EMAILDB_DB_NAME} || 'emaildb_dev';
 
-    return $connection = Shypper::Schema->connect(
+    $connection = Shypper::Schema->connect(
         "dbi:Pg:host=$db_host;port=$db_port;dbname=$db_name",
         $db_user, $db_pass,
         {
@@ -42,6 +43,10 @@ sub GET_SCHEMA {
         }
     );
 
+    # before anything queries a column this database may not have
+    detect_schema_features($connection);
+
+    return $connection;
 }
 
 1;
